@@ -1,6 +1,6 @@
 [package]
 name = "serde_someip"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Morten Mey <morten.mey@gmail.com>"]
 license = "MIT OR Apache-2.0"
@@ -22,3 +22,6 @@ serde_someip_derive = { path = "../serde_someip_derive", version = "0.1.0", opti
 serde = { version = "1.0", features = ["derive"] }
 bytes = { version = "1.1", features = ["serde"] }
 trybuild = "1.0"
+
+[package.metadata.docs.rs]
+all-features = true
