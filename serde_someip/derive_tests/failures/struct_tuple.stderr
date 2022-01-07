@@ -1,0 +1,5 @@
+error: Only newtype structs (tuple structs with exactly one paramter) are supported
+ --> derive_tests/failures/struct_tuple.rs:4:12
+  |
+4 | struct Test(u32, u64);
+  |            ^^^^^^^^^^

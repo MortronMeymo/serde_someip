@@ -1,0 +1,5 @@
+error: Unions are not supported by someip
+ --> derive_tests/failures/union.rs:4:1
+  |
+4 | union Test {
+  | ^^^^^

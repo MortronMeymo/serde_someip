@@ -1,0 +1,77 @@
+error: invalid digit found in string
+ --> derive_tests/failures/invalid_enums.rs:6:22
+  |
+6 |     #[someip(value = -1)]
+  |                      ^
+
+error: Missing someip attribute
+ --> derive_tests/failures/invalid_enums.rs:8:5
+  |
+8 |     B,
+  |     ^
+
+error: SomeIp only supports unit enum variants
+  --> derive_tests/failures/invalid_enums.rs:10:5
+   |
+10 |     C {
+   |     ^
+
+error: SomeIp only supports unit enum variants
+  --> derive_tests/failures/invalid_enums.rs:14:5
+   |
+14 |     D(u32),
+   |     ^
+
+error: Required attribute value not found
+  --> derive_tests/failures/invalid_enums.rs:15:13
+   |
+15 |     #[someip(valeu = 3)]
+   |             ^^^^^^^^^^^
+
+error: Unknown attribute: foo
+  --> derive_tests/failures/invalid_enums.rs:17:25
+   |
+17 |     #[someip(value = 4, foo = bar)]
+   |                         ^^^
+
+error: number too large to fit in target type
+  --> derive_tests/failures/invalid_enums.rs:19:22
+   |
+19 |     #[someip(value = 256)]
+   |                      ^^^
+
+error: Duplicate value
+  --> derive_tests/failures/invalid_enums.rs:24:22
+   |
+24 |     #[someip(value = 5)]
+   |                      ^
+
+error: Unsupported raw_type: Only u8, u16, u32, u64, i8, i16, i32 or i64 are supported
+  --> derive_tests/failures/invalid_enums.rs:29:21
+   |
+29 | #[someip(raw_type = f32)]
+   |                     ^^^
+
+error: Missing someip attribute
+  --> derive_tests/failures/invalid_enums.rs:36:1
+   |
+36 | enum Test3 {
+   | ^^^^
+
+error: Duplicate attribute
+  --> derive_tests/failures/invalid_enums.rs:42:26
+   |
+42 | #[someip(raw_type = i16, raw_type = i32)]
+   |                          ^^^^^^^^
+
+error: Required attribute raw_type not found
+  --> derive_tests/failures/invalid_enums.rs:49:9
+   |
+49 | #[someip(rwa_type = i16)]
+   |         ^^^^^^^^^^^^^^^^
+
+error: Unknown attribute: foo
+  --> derive_tests/failures/invalid_enums.rs:56:26
+   |
+56 | #[someip(raw_type = i16, foo = bar)]
+   |                          ^^^

@@ -1,0 +1,17 @@
+error: Empty structs are not supported by someip
+ --> derive_tests/failures/struct_empty.rs:4:1
+  |
+4 | struct TestUnit;
+  | ^^^^^^
+
+error: Empty structs are not supported by someip
+ --> derive_tests/failures/struct_empty.rs:7:1
+  |
+7 | struct TestUnnamed();
+  | ^^^^^^
+
+error: Empty structs are not supported by someip
+  --> derive_tests/failures/struct_empty.rs:10:1
+   |
+10 | struct TestNamed {}
+   | ^^^^^^

@@ -1,0 +1,37 @@
+error: A elements attribute is required for element string types
+  --> derive_tests/failures/invalid_structs_newtypes.rs:13:9
+   |
+13 | #[someip(max_elements = 42)]
+   |         ^^^^^^^^^^^^^^^^^^^
+
+error: Required attribute max_size not found
+  --> derive_tests/failures/invalid_structs_newtypes.rs:17:40
+   |
+17 | #[someip(max_elements = 42, elements = ())]
+   |                                        ^^
+
+error: Required attribute max_elements not found
+  --> derive_tests/failures/invalid_structs_newtypes.rs:21:40
+   |
+21 | #[someip(max_elements = 42, elements = ())]
+   |                                        ^^
+
+error: Required attribute max_size not found
+  --> derive_tests/failures/invalid_structs_newtypes.rs:25:21
+   |
+25 | #[someip(elements = ())]
+   |                     ^^
+
+error[E0599]: no variant or associated item named `SOMEIP_TYPE` found for enum `SomeEnum` in the current scope
+ --> derive_tests/failures/invalid_structs_newtypes.rs:9:10
+  |
+4 | enum SomeEnum {
+  | ------------- variant or associated item `SOMEIP_TYPE` not found here
+...
+9 | #[derive(SomeIp)]
+  |          ^^^^^^ variant or associated item not found in `SomeEnum`
+  |
+  = help: items from traits can only be used if the trait is implemented and in scope
+  = note: the following trait defines an item `SOMEIP_TYPE`, perhaps you need to implement it:
+          candidate #1: `SomeIp`
+  = note: this error originates in the derive macro `SomeIp` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -1,0 +1,22 @@
+error: Either all fields or none must have an id
+ --> derive_tests/failures/invalid_structs.rs:4:28
+  |
+4 |   struct NeitherTlvNorNonTlv {
+  |  ____________________________^
+5 | |     a: u32,
+6 | |     #[someip(id = 1)]
+7 | |     b: u32,
+8 | | }
+  | |_^
+
+error: invalid digit found in string
+  --> derive_tests/failures/invalid_structs.rs:18:19
+   |
+18 |     #[someip(id = -1)]
+   |                   ^
+
+error: Cannot use Option outside of TLV struct
+  --> derive_tests/failures/invalid_structs.rs:25:8
+   |
+25 |     b: Option<f64>,
+   |        ^^^^^^
