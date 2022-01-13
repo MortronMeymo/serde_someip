@@ -71,6 +71,28 @@ trait SomeIpWriter {
     }
 }
 
+impl<T: SomeIpWriter> SomeIpWriter for &mut T {
+    #[inline]
+    fn write(&mut self, data: &[u8]) -> Result<()> {
+        (**self).write(data)
+    }
+
+    #[inline]
+    fn copy_within<R: std::ops::RangeBounds<usize>>(&mut self, src: R, dest: usize) {
+        (**self).copy_within(src, dest);
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        (**self).len()
+    }
+
+    #[inline]
+    unsafe fn set_len(&mut self, len: usize) {
+        (**self).set_len(len);
+    }
+}
+
 impl SomeIpWriter for Vec<u8> {
     fn write(&mut self, data: &[u8]) -> Result<()> {
         self.extend_from_slice(data);
@@ -803,6 +825,23 @@ where
     to_x_manuel::<Options, _, _>(value, &T::SOMEIP_TYPE, Vec::default())
 }
 
+/// Appends the serialised value to a [Vec<u8>]
+///
+/// This can be usefull if you want to serialize multiple messages one after another, since you can reuse the same
+/// vec and the vec does not loose its capacity you will end up with less memory allocations.
+///
+/// # Panics
+/// This function panics if the implementation of the [SomeIp](super::SomeIp) trait
+/// produces invalid type information or this information is incompatible with the [Serialize](serde::Serialize) implementation.
+pub fn append_to_vec<Options, T>(value: &T, vec: &mut Vec<u8>) -> Result<()>
+where
+    Options: SomeIpOptions,
+    T: Serialize + SomeIp,
+{
+    to_x_manuel::<Options, _, _>(value, &T::SOMEIP_TYPE, vec)?;
+    Ok(())
+}
+
 #[cfg(feature = "bytes")]
 /// Serialises the value to a `Bytes`
 ///
@@ -811,13 +850,32 @@ where
 /// # Panics
 /// This function panics if the implementation of the [SomeIp](super::SomeIp) trait
 /// produces invalid type information or this information is incompatible with the [Serialize](serde::Serialize) implementation.
-#[inline]
 pub fn to_bytes<Options, T>(value: &T) -> Result<bytes::Bytes>
 where
     Options: SomeIpOptions,
     T: Serialize + SomeIp,
 {
     Ok(to_x_manuel::<Options, _, _>(value, &T::SOMEIP_TYPE, BytesMut::default())?.freeze())
+}
+
+#[cfg(feature = "bytes")]
+/// Appends the serialised value to a `Bytes`
+///
+/// This can be usefull if you want to serialize multiple messages one after another, since you can reuse the same
+/// BytesMut and the BytesMut does not loose its capacity you will end up with less memory allocations.
+///
+/// *Only available with the `bytes` feature.*
+///
+/// # Panics
+/// This function panics if the implementation of the [SomeIp](super::SomeIp) trait
+/// produces invalid type information or this information is incompatible with the [Serialize](serde::Serialize) implementation.
+pub fn append_to_bytes<Options, T>(value: &T, bytes: &mut BytesMut) -> Result<()>
+where
+    Options: SomeIpOptions,
+    T: Serialize + SomeIp,
+{
+    to_x_manuel::<Options, _, _>(value, &T::SOMEIP_TYPE, bytes)?;
+    Ok(())
 }
 
 #[test]
@@ -1484,4 +1542,22 @@ fn test_newtype() {
         vec![2, 0x68, 0x69],
         to_vec::<ExampleOptions, _>(&Test("hi".into())).unwrap()
     );
+}
+
+#[test]
+fn test_append_to_vec() {
+    #[derive(Debug, serde::Serialize)]
+    struct Test(String);
+
+    impl SomeIp for Test {
+        const SOMEIP_TYPE: SomeIpType = SomeIpType::String(SomeIpString {
+            min_size: 0,
+            max_size: 42,
+            length_field_size: Some(LengthFieldSize::OneByte),
+        });
+    }
+
+    let mut result = Vec::default();
+    append_to_vec::<ExampleOptions, _>(&Test("hi".into()), &mut result).unwrap();
+    assert_eq!(vec![2, 0x68, 0x69], result);
 }
