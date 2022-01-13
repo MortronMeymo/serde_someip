@@ -211,14 +211,16 @@ impl SerializeStructVariant for Phony {
         unimplemented!()
     }
 }
-struct SomeIpSeqSerializer<'a, Options: SomeIpOptions, Writer: SomeIpWriter> {
+struct SomeIpSeqSerializer<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> {
     serializer: &'a mut SomeIpSerializer<Options, Writer>,
     someip_type: &'static SomeIpSequence,
     length_field_size: Option<LengthFieldSize>,
     element_count: usize,
 }
 
-impl<'a, Options: SomeIpOptions, Writer: SomeIpWriter> SomeIpSeqSerializer<'a, Options, Writer> {
+impl<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter>
+    SomeIpSeqSerializer<'a, Options, Writer>
+{
     fn new(
         serializer: &'a mut SomeIpSerializer<Options, Writer>,
         len: Option<usize>,
@@ -266,7 +268,7 @@ impl<'a, Options: SomeIpOptions, Writer: SomeIpWriter> SomeIpSeqSerializer<'a, O
     }
 }
 
-impl<'a, Options: SomeIpOptions, Writer: SomeIpWriter> SerializeSeq
+impl<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> SerializeSeq
     for SomeIpSeqSerializer<'a, Options, Writer>
 {
     type Ok = ();
@@ -298,13 +300,15 @@ impl<'a, Options: SomeIpOptions, Writer: SomeIpWriter> SerializeSeq
     }
 }
 
-struct SomeIpStructSerializer<'a, Options: SomeIpOptions, Writer: SomeIpWriter> {
+struct SomeIpStructSerializer<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> {
     serializer: &'a mut SomeIpSerializer<Options, Writer>,
     struct_type: &'static SomeIpStruct,
     length_field_size: Option<LengthFieldSize>,
 }
 
-impl<'a, Options: SomeIpOptions, Writer: SomeIpWriter> SomeIpStructSerializer<'a, Options, Writer> {
+impl<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter>
+    SomeIpStructSerializer<'a, Options, Writer>
+{
     fn new(serializer: &'a mut SomeIpSerializer<Options, Writer>, len: usize) -> Result<Self> {
         if let SomeIpType::Struct(s) = serializer.next_type {
             if len != s.field_count() {
@@ -336,7 +340,7 @@ impl<'a, Options: SomeIpOptions, Writer: SomeIpWriter> SomeIpStructSerializer<'a
     }
 }
 
-impl<'a, Options: SomeIpOptions, Writer: SomeIpWriter> SerializeStruct
+impl<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> SerializeStruct
     for SomeIpStructSerializer<'a, Options, Writer>
 {
     type Ok = ();
@@ -394,7 +398,7 @@ impl<'a, Options: SomeIpOptions, Writer: SomeIpWriter> SerializeStruct
     }
 }
 
-struct SomeIpSerializer<Options: SomeIpOptions, Writer: SomeIpWriter> {
+struct SomeIpSerializer<Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> {
     writer: Writer,
     next_type: &'static SomeIpType,
     is_in_tlv_struct: bool,
@@ -403,7 +407,7 @@ struct SomeIpSerializer<Options: SomeIpOptions, Writer: SomeIpWriter> {
     phantom: PhantomData<Options>,
 }
 
-impl<Options: SomeIpOptions, Writer: SomeIpWriter> SomeIpSerializer<Options, Writer> {
+impl<Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> SomeIpSerializer<Options, Writer> {
     fn new(writer: Writer, root_type: &'static SomeIpType) -> SomeIpSerializer<Options, Writer> {
         SomeIpSerializer {
             writer,
@@ -509,7 +513,7 @@ impl<Options: SomeIpOptions, Writer: SomeIpWriter> SomeIpSerializer<Options, Wri
     }
 }
 
-impl<'a, Options: SomeIpOptions, Writer: SomeIpWriter> Serializer
+impl<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> Serializer
     for &'a mut SomeIpSerializer<Options, Writer>
 {
     type Ok = ();
@@ -799,7 +803,7 @@ fn to_x_manuel<Options, T, Buf: SomeIpWriter>(
     buf: Buf,
 ) -> Result<Buf>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     T: Serialize,
 {
     #[cfg(debug_assertions)]
@@ -819,7 +823,7 @@ where
 /// produces invalid type information or this information is incompatible with the [Serialize](serde::Serialize) implementation.
 pub fn to_vec<Options, T>(value: &T) -> Result<Vec<u8>>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     T: Serialize + SomeIp,
 {
     to_x_manuel::<Options, _, _>(value, &T::SOMEIP_TYPE, Vec::default())
@@ -835,7 +839,7 @@ where
 /// produces invalid type information or this information is incompatible with the [Serialize](serde::Serialize) implementation.
 pub fn append_to_vec<Options, T>(value: &T, vec: &mut Vec<u8>) -> Result<()>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     T: Serialize + SomeIp,
 {
     to_x_manuel::<Options, _, _>(value, &T::SOMEIP_TYPE, vec)?;
@@ -852,7 +856,7 @@ where
 /// produces invalid type information or this information is incompatible with the [Serialize](serde::Serialize) implementation.
 pub fn to_bytes<Options, T>(value: &T) -> Result<bytes::Bytes>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     T: Serialize + SomeIp,
 {
     Ok(to_x_manuel::<Options, _, _>(value, &T::SOMEIP_TYPE, BytesMut::default())?.freeze())
@@ -871,7 +875,7 @@ where
 /// produces invalid type information or this information is incompatible with the [Serialize](serde::Serialize) implementation.
 pub fn append_to_bytes<Options, T>(value: &T, bytes: &mut BytesMut) -> Result<()>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     T: Serialize + SomeIp,
 {
     to_x_manuel::<Options, _, _>(value, &T::SOMEIP_TYPE, bytes)?;

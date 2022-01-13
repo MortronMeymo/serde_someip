@@ -17,8 +17,8 @@ pub use de::from_bytes;
 pub use de::{from_reader, from_slice};
 pub use error::{Error, Result};
 #[cfg(feature = "bytes")]
-pub use ser::to_bytes;
-pub use ser::to_vec;
+pub use ser::{append_to_bytes, to_bytes};
+pub use ser::{append_to_vec, to_vec};
 
 pub mod length_fields;
 pub mod options;

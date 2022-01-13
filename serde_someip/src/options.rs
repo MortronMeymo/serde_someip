@@ -6,6 +6,11 @@
 
 use super::error::{Error, Result};
 use super::length_fields::LengthFieldSize;
+use super::SomeIp;
+
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+use std::io::Read;
 
 /// Its a ByteOrder enum, what do you expect?
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,6 +74,22 @@ pub enum ActionOnTooMuchData {
 ///
 /// It is expected that these will be almost always identical, since they are usually defined once
 /// either per project or even per vehicle OEM.
+///
+/// This trait also provides some convenience functions for serializing/deserializing:
+/// ```
+/// # use serde_someip::options::ExampleOptions;
+/// use serde_someip::{SomeIpOptions, to_vec, from_slice};
+///
+/// let manually = to_vec::<ExampleOptions, _>(&42u32).unwrap();
+/// let convenience = ExampleOptions::to_vec(&42u32).unwrap();
+///
+/// assert_eq!(manually, convenience);
+///
+/// let manually: u32 =  from_slice::<ExampleOptions, _>(&manually).unwrap();
+/// let convenience: u32 = ExampleOptions::from_slice(&convenience).unwrap();
+///
+/// assert_eq!(manually, convenience);
+/// ```
 pub trait SomeIpOptions {
     /// The byte order to use
     const BYTE_ORDER: ByteOrder = ByteOrder::BigEndian;
@@ -124,6 +145,78 @@ pub trait SomeIpOptions {
         if Self::STRING_ENCODING == StringEncoding::Ascii && Self::STRING_WITH_BOM {
             panic!("Encoding is ASCII with BOM which is impossible");
         }
+    }
+
+    /// Convenience wrapper for [super::from_reader]
+    #[inline]
+    fn from_reader<T, Reader>(reader: Reader, len: usize) -> Result<T>
+    where
+        T: DeserializeOwned + SomeIp + ?Sized,
+        Reader: Read,
+    {
+        super::from_reader::<Self, T, _>(reader, len)
+    }
+
+    /// Convenience wrapper for [super::from_slice]
+    #[inline]
+    fn from_slice<'a, T>(slice: &'a [u8]) -> Result<T>
+    where
+        T: Deserialize<'a> + SomeIp + ?Sized,
+    {
+        super::from_slice::<'a, Self, T>(slice)
+    }
+
+    #[cfg(feature = "bytes")]
+    /// Convenience wrapper for [super::from_bytes]
+    ///
+    /// *Only available with the `bytes` feature.*
+    #[inline]
+    fn from_bytes<T>(data: bytes::Bytes) -> Result<T>
+    where
+        T: DeserializeOwned + SomeIp + ?Sized,
+    {
+        super::from_bytes::<Self, T>(data)
+    }
+
+    /// Convenience wrapper for [super::to_vec]
+    #[inline]
+    fn to_vec<T>(value: &T) -> Result<Vec<u8>>
+    where
+        T: Serialize + SomeIp,
+    {
+        super::to_vec::<Self, _>(value)
+    }
+
+    /// Convenience wrapper for [super::append_to_vec]
+    #[inline]
+    fn append_to_vec<T>(value: &T, vec: &mut Vec<u8>) -> Result<()>
+    where
+        T: Serialize + SomeIp,
+    {
+        super::append_to_vec::<Self, _>(value, vec)
+    }
+
+    #[cfg(feature = "bytes")]
+    /// Convenience wrapper for [super::to_bytes]
+    ///
+    /// *Only available with the `bytes` feature.*
+    #[inline]
+    fn to_bytes<T>(value: &T) -> Result<bytes::Bytes>
+    where
+        T: Serialize + SomeIp,
+    {
+        super::to_bytes::<Self, _>(value)
+    }
+
+    #[cfg(feature = "bytes")]
+    /// Convenience wrapper for [super::append_to_bytes]
+    ///
+    /// *Only available with the `bytes` feature.*
+    fn append_to_bytes<T>(value: &T, bytes: &mut bytes::BytesMut) -> Result<()>
+    where
+        T: Serialize + SomeIp,
+    {
+        super::append_to_bytes::<Self, _>(value, bytes)
     }
 
     #[doc(hidden)]

@@ -8,12 +8,12 @@ use super::wire_type::WireType;
 use std::fmt::{Display, Formatter};
 
 pub(crate) trait SomeIpSize {
-    fn wanted_length_field<Options: SomeIpOptions>(
+    fn wanted_length_field<Options: SomeIpOptions + ?Sized>(
         &self,
         is_in_tlv_struct: bool,
     ) -> Result<Option<LengthFieldSize>>;
     fn is_const_size(&self) -> bool;
-    fn max_len<Options: SomeIpOptions>(&self, is_in_tlv_struct: bool) -> Result<usize>;
+    fn max_len<Options: SomeIpOptions + ?Sized>(&self, is_in_tlv_struct: bool) -> Result<usize>;
 }
 
 /// All primitives defined by SomeIp.
@@ -214,7 +214,7 @@ pub struct SomeIpString {
 }
 
 impl SomeIpSize for SomeIpString {
-    fn wanted_length_field<Options: SomeIpOptions>(
+    fn wanted_length_field<Options: SomeIpOptions + ?Sized>(
         &self,
         is_in_tlv_struct: bool,
     ) -> Result<Option<LengthFieldSize>> {
@@ -234,7 +234,7 @@ impl SomeIpSize for SomeIpString {
         self.min_size == self.max_size
     }
 
-    fn max_len<Options: SomeIpOptions>(&self, is_in_tlv_struct: bool) -> Result<usize> {
+    fn max_len<Options: SomeIpOptions + ?Sized>(&self, is_in_tlv_struct: bool) -> Result<usize> {
         let size = self.wanted_length_field::<Options>(is_in_tlv_struct)?;
         if let Some(size) = size {
             let size = Options::select_length_field_size(size, self.max_size, is_in_tlv_struct)?;
@@ -351,7 +351,7 @@ impl Display for SomeIpType {
 }
 
 impl SomeIpSize for SomeIpSequence {
-    fn wanted_length_field<Options: SomeIpOptions>(
+    fn wanted_length_field<Options: SomeIpOptions + ?Sized>(
         &self,
         is_in_tlv_struct: bool,
     ) -> Result<Option<LengthFieldSize>> {
@@ -371,7 +371,7 @@ impl SomeIpSize for SomeIpSequence {
         self.min_elements == self.max_elements && self.element_type.is_const_size()
     }
 
-    fn max_len<Options: SomeIpOptions>(&self, is_in_tlv_struct: bool) -> Result<usize> {
+    fn max_len<Options: SomeIpOptions + ?Sized>(&self, is_in_tlv_struct: bool) -> Result<usize> {
         let size = self.wanted_length_field::<Options>(is_in_tlv_struct)?;
         let len = self.max_elements * self.element_type.max_len::<Options>(false)?;
         if let Some(size) = size {
@@ -384,7 +384,7 @@ impl SomeIpSize for SomeIpSequence {
 }
 
 impl SomeIpSize for SomeIpStruct {
-    fn wanted_length_field<Options: SomeIpOptions>(
+    fn wanted_length_field<Options: SomeIpOptions + ?Sized>(
         &self,
         is_in_tlv_struct: bool,
     ) -> Result<Option<LengthFieldSize>> {
@@ -411,7 +411,7 @@ impl SomeIpSize for SomeIpStruct {
         !self.uses_tlv() && self.fields.iter().all(|f| f.field_type.is_const_size())
     }
 
-    fn max_len<Options: SomeIpOptions>(&self, is_in_tlv_struct: bool) -> Result<usize> {
+    fn max_len<Options: SomeIpOptions + ?Sized>(&self, is_in_tlv_struct: bool) -> Result<usize> {
         let size = self.wanted_length_field::<Options>(is_in_tlv_struct)?;
         let mut len = 0;
         for f in self.fields {
@@ -430,7 +430,7 @@ impl SomeIpSize for SomeIpStruct {
 
 impl SomeIpSize for SomeIpType {
     #[inline]
-    fn wanted_length_field<Options: SomeIpOptions>(
+    fn wanted_length_field<Options: SomeIpOptions + ?Sized>(
         &self,
         is_in_tlv_struct: bool,
     ) -> Result<Option<LengthFieldSize>> {
@@ -453,7 +453,7 @@ impl SomeIpSize for SomeIpType {
     }
 
     #[inline]
-    fn max_len<Options: SomeIpOptions>(&self, is_in_tlv_struct: bool) -> Result<usize> {
+    fn max_len<Options: SomeIpOptions + ?Sized>(&self, is_in_tlv_struct: bool) -> Result<usize> {
         match self {
             SomeIpType::Primitive(prim) => Ok(prim.get_len()),
             SomeIpType::Enum(e) => Ok(e.raw_type.get_len()),

@@ -176,7 +176,7 @@ impl<'de, R: Read> SomeIpReader<'de> for ExtendedReader<R> {
 
 struct SomeIpDeserializer<'de, Options, Reader>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     Reader: SomeIpReader<'de>,
 {
     reader: Reader,
@@ -191,7 +191,7 @@ where
 
 impl<'de, Options, Reader> SomeIpReader<'de> for SomeIpDeserializer<'de, Options, Reader>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     Reader: SomeIpReader<'de>,
 {
     const CAN_BORROW: bool = Reader::CAN_BORROW;
@@ -231,7 +231,7 @@ where
 
 impl<'de, Options, Reader> SomeIpDeserializer<'de, Options, Reader>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     Reader: SomeIpReader<'de>,
 {
     fn new(
@@ -461,7 +461,7 @@ where
 
 impl<'de, Options, Reader> EnumAccess<'de> for &mut SomeIpDeserializer<'de, Options, Reader>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     Reader: SomeIpReader<'de>,
 {
     type Error = Error;
@@ -477,7 +477,7 @@ where
 
 impl<'de, Options, Reader> VariantAccess<'de> for &mut SomeIpDeserializer<'de, Options, Reader>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     Reader: SomeIpReader<'de>,
 {
     type Error = Error;
@@ -515,7 +515,7 @@ where
 
 struct SomeIpSeqAccess<'de: 'a, 'a, Options, Reader>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     Reader: SomeIpReader<'de>,
 {
     deserializer: &'a mut SomeIpDeserializer<'de, Options, Reader>,
@@ -525,7 +525,7 @@ where
 
 impl<'de: 'a, 'a, Options, Reader> SomeIpSeqAccess<'de, 'a, Options, Reader>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     Reader: SomeIpReader<'de>,
 {
     fn new(
@@ -542,7 +542,7 @@ where
 
 impl<'de: 'a, 'a, Options, Reader> SeqAccess<'de> for SomeIpSeqAccess<'de, 'a, Options, Reader>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     Reader: SomeIpReader<'de>,
 {
     type Error = Error;
@@ -597,7 +597,7 @@ where
 
 struct SomeIpStructAccess<'de: 'a, 'a, Options, Reader>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     Reader: SomeIpReader<'de>,
 {
     deserializer: &'a mut SomeIpDeserializer<'de, Options, Reader>,
@@ -611,7 +611,7 @@ where
 
 impl<'de: 'a, 'a, Options, Reader> SomeIpStructAccess<'de, 'a, Options, Reader>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     Reader: SomeIpReader<'de>,
 {
     #[inline]
@@ -654,7 +654,7 @@ where
 impl<'de: 'a, 'a, Options, Reader> SeqAccess<'de>
     for &mut SomeIpStructAccess<'de, 'a, Options, Reader>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     Reader: SomeIpReader<'de>,
 {
     type Error = Error;
@@ -689,7 +689,7 @@ where
 impl<'de: 'a, 'a, Options, Reader> MapAccess<'de>
     for &mut SomeIpStructAccess<'de, 'a, Options, Reader>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     Reader: SomeIpReader<'de>,
 {
     type Error = Error;
@@ -714,7 +714,7 @@ where
 }
 impl<'de, Options, Reader> Deserializer<'de> for &mut SomeIpDeserializer<'de, Options, Reader>
 where
-    Options: SomeIpOptions,
+    Options: SomeIpOptions + ?Sized,
     Reader: SomeIpReader<'de>,
 {
     type Error = Error;
@@ -1118,15 +1118,15 @@ where
 }
 
 #[inline]
-fn from_internal<
-    'de,
-    Options: SomeIpOptions,
-    T: Deserialize<'de> + ?Sized,
-    Reader: SomeIpReader<'de>,
->(
+fn from_internal<'de, Options, T, Reader>(
     reader: Reader,
     someip_type: &'static SomeIpType,
-) -> Result<T> {
+) -> Result<T>
+where
+    Options: SomeIpOptions + ?Sized,
+    T: Deserialize<'de> + ?Sized,
+    Reader: SomeIpReader<'de>,
+{
     #[cfg(debug_assertions)]
     {
         Options::verify_string_encoding();
@@ -1142,10 +1142,12 @@ fn from_internal<
 /// # Panics
 /// This function panics if the implementation of the [SomeIp](super::SomeIp) trait
 /// produces invalid type information or this information is incompatible with the [Deserialize](serde::Deserialize) implementation.
-pub fn from_reader<Options: SomeIpOptions, T: DeserializeOwned + SomeIp + ?Sized, Reader: Read>(
-    reader: Reader,
-    len: usize,
-) -> Result<T> {
+pub fn from_reader<Options, T, Reader>(reader: Reader, len: usize) -> Result<T>
+where
+    Options: SomeIpOptions + ?Sized,
+    T: DeserializeOwned + SomeIp + ?Sized,
+    Reader: Read,
+{
     from_internal::<Options, T, _>(ExtendedReader::new(reader, len), &T::SOMEIP_TYPE)
 }
 
@@ -1154,16 +1156,18 @@ pub fn from_reader<Options: SomeIpOptions, T: DeserializeOwned + SomeIp + ?Sized
 /// # Panics
 /// This function panics if the implementation of the [SomeIp](super::SomeIp) trait
 /// produces invalid type information or this information is incompatible with the [Deserialize](serde::Deserialize) implementation.
-pub fn from_slice<'a, Options: SomeIpOptions, T: Deserialize<'a> + SomeIp + ?Sized>(
-    data: &'a [u8],
-) -> Result<T> {
+pub fn from_slice<'a, Options, T>(data: &'a [u8]) -> Result<T>
+where
+    Options: SomeIpOptions + ?Sized,
+    T: Deserialize<'a> + SomeIp + ?Sized,
+{
     from_internal::<Options, T, _>(data, &T::SOMEIP_TYPE)
 }
 
 #[cfg(feature = "bytes")]
 /// Deserialises the value from `Bytes`.
 ///
-/// *Only available with the `derive` feature.*
+/// *Only available with the `bytes` feature.*
 ///
 /// Currently this is just a convenience for [from_slice].
 ///
@@ -1171,9 +1175,11 @@ pub fn from_slice<'a, Options: SomeIpOptions, T: Deserialize<'a> + SomeIp + ?Siz
 /// This function panics if the implementation of the [SomeIp](super::SomeIp) trait
 /// produces invalid type information or this information is incompatible with the [Deserialize](serde::Deserialize) implementation.
 #[inline]
-pub fn from_bytes<Options: SomeIpOptions, T: DeserializeOwned + SomeIp + ?Sized>(
-    data: bytes::Bytes,
-) -> Result<T> {
+pub fn from_bytes<Options, T>(data: bytes::Bytes) -> Result<T>
+where
+    Options: SomeIpOptions + ?Sized,
+    T: DeserializeOwned + SomeIp + ?Sized,
+{
     from_slice::<Options, T>(&data)
 }
 
