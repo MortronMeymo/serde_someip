@@ -440,11 +440,13 @@ where
                     self.discard(len)?;
                 } else {
                     self.next_length_field_size = wire_type.get_length_field_size();
-                    let lfsize =
-                        Options::overwrite_length_field_size(s.length_field_size).expect(&format!(
+                    let lfsize = Options::overwrite_length_field_size(s.length_field_size)
+                        .unwrap_or_else(|| {
+                            panic!(
                             "Require a length field size to deserialize unknon id {} in struct {}",
                             id, s.name
-                        ));
+                        )
+                        });
                     let len = self.begin_length_delimited_section(lfsize)?;
                     self.discard(len)?;
                     self.end_length_delimited_section()?;
@@ -569,15 +571,13 @@ where
             }
 
             Ok(Some(element))
+        } else if self.element_count < self.sequence_type.min_elements {
+            Err(Error::NotEnoughData {
+                min: self.sequence_type.min_elements,
+                actual: self.element_count,
+            })
         } else {
-            if self.element_count < self.sequence_type.min_elements {
-                Err(Error::NotEnoughData {
-                    min: self.sequence_type.min_elements,
-                    actual: self.element_count,
-                })
-            } else {
-                Ok(None)
-            }
+            Ok(None)
         }
     }
 
@@ -1082,7 +1082,7 @@ where
     }
 
     fn deserialize_identifier<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        if self.next_field_name != "" {
+        if !self.next_field_name.is_empty() {
             visitor.visit_str(std::mem::take(&mut self.next_field_name))
         } else if let SomeIpType::Enum(e) = self.next_type {
             let enum_value = match e.get_raw_type() {
