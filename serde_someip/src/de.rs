@@ -1160,6 +1160,23 @@ pub fn from_slice<'a, Options: SomeIpOptions, T: Deserialize<'a> + SomeIp + ?Siz
     from_internal::<Options, T, _>(data, &T::SOMEIP_TYPE)
 }
 
+#[cfg(feature = "bytes")]
+/// Deserialises the value from `Bytes`.
+///
+/// *Only available with the `derive` feature.*
+///
+/// Currently this is just a convenience for [from_slice].
+///
+/// # Panics
+/// This function panics if the implementation of the [SomeIp](super::SomeIp) trait
+/// produces invalid type information or this information is incompatible with the [Deserialize](serde::Deserialize) implementation.
+#[inline]
+pub fn from_bytes<Options: SomeIpOptions, T: DeserializeOwned + SomeIp + ?Sized>(
+    data: bytes::Bytes,
+) -> Result<T> {
+    from_slice::<Options, T>(&data)
+}
+
 #[test]
 fn test_bool() {
     assert_eq!(false, from_slice::<ExampleOptions, bool>(&[0]).unwrap());

@@ -12,8 +12,12 @@ pub mod de;
 pub mod error;
 pub mod ser;
 
+#[cfg(feature = "bytes")]
+pub use de::from_bytes;
 pub use de::{from_reader, from_slice};
 pub use error::{Error, Result};
+#[cfg(feature = "bytes")]
+pub use ser::to_bytes;
 pub use ser::to_vec;
 
 pub mod length_fields;
@@ -29,6 +33,8 @@ pub use types::SomeIp;
 extern crate serde_someip_derive;
 #[cfg(feature = "derive")]
 /// Provides #[derive(SomeIp)] requires the `derive` feature.
+///
+/// *Only available with the `derive` feature.*
 ///
 /// # Length Field Sizes
 /// For multiple types you can specify a `length_field_size` this is always optional.
@@ -162,7 +168,7 @@ extern crate serde_someip_derive;
 ///
 /// # `treat_as`
 /// You can use `treat_as` to workaround types that someip does not know.
-/// For example with typedefs or using the bytes crate:
+/// For example typedefs or using the bytes crate:
 /// ```
 /// # use serde_someip::SomeIp;
 /// use bytes::Bytes;

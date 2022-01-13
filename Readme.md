@@ -29,3 +29,10 @@ fn main() {
     println!("deserialized = {:?}", deserialized);
 }
 ```
+
+For more attributes used by `derive(SomeIp)` see the [macro doc](https://docs.rs/serde_someip/0.1.1/serde_someip/derive.SomeIp.html).
+
+## Available features
+
+- `derive`: Enables the `SomeIp` derive macro
+- `bytes`: Enables `to/from_bytes` functions using the [bytes](https://crates.io/crates/bytes) crate

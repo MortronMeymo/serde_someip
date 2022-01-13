@@ -8,6 +8,9 @@ use super::wire_type::WireType;
 
 use serde::ser::*;
 
+#[cfg(feature = "bytes")]
+use bytes::BytesMut;
+
 use std::marker::PhantomData;
 
 trait SomeIpWriter {
@@ -77,6 +80,29 @@ impl SomeIpWriter for Vec<u8> {
     #[inline]
     fn copy_within<R: std::ops::RangeBounds<usize>>(&mut self, src: R, dest: usize) {
         self.as_mut_slice().copy_within(src, dest);
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    #[inline]
+    unsafe fn set_len(&mut self, len: usize) {
+        self.set_len(len);
+    }
+}
+
+#[cfg(feature = "bytes")]
+impl SomeIpWriter for BytesMut {
+    fn write(&mut self, data: &[u8]) -> Result<()> {
+        self.extend_from_slice(data);
+        Ok(())
+    }
+
+    #[inline]
+    fn copy_within<R: std::ops::RangeBounds<usize>>(&mut self, src: R, dest: usize) {
+        (self as &mut [u8]).copy_within(src, dest);
     }
 
     #[inline]
@@ -745,7 +771,11 @@ impl<'a, Options: SomeIpOptions, Writer: SomeIpWriter> Serializer
 }
 
 #[inline]
-fn to_vec_manuel<Options, T>(value: &T, someip_type: &'static SomeIpType) -> Result<Vec<u8>>
+fn to_x_manuel<Options, T, Buf: SomeIpWriter>(
+    value: &T,
+    someip_type: &'static SomeIpType,
+    buf: Buf,
+) -> Result<Buf>
 where
     Options: SomeIpOptions,
     T: Serialize,
@@ -755,7 +785,7 @@ where
         Options::verify_string_encoding();
         someip_type.verify();
     }
-    let mut serializer = SomeIpSerializer::<Options, Vec<u8>>::new(Vec::default(), someip_type);
+    let mut serializer = SomeIpSerializer::<Options, Buf>::new(buf, someip_type);
     value.serialize(&mut serializer)?;
     Ok(serializer.finish())
 }
@@ -770,7 +800,24 @@ where
     Options: SomeIpOptions,
     T: Serialize + SomeIp,
 {
-    to_vec_manuel::<Options, _>(value, &T::SOMEIP_TYPE)
+    to_x_manuel::<Options, _, _>(value, &T::SOMEIP_TYPE, Vec::default())
+}
+
+#[cfg(feature = "bytes")]
+/// Serialises the value to a `Bytes`
+///
+/// *Only available with the `bytes` feature.*
+///
+/// # Panics
+/// This function panics if the implementation of the [SomeIp](super::SomeIp) trait
+/// produces invalid type information or this information is incompatible with the [Serialize](serde::Serialize) implementation.
+#[inline]
+pub fn to_bytes<Options, T>(value: &T) -> Result<bytes::Bytes>
+where
+    Options: SomeIpOptions,
+    T: Serialize + SomeIp,
+{
+    Ok(to_x_manuel::<Options, _, _>(value, &T::SOMEIP_TYPE, BytesMut::default())?.freeze())
 }
 
 #[test]
@@ -932,13 +979,13 @@ fn test_bytes() {
     bytes.put_u32(0x12345678);
     assert_eq!(
         vec![0, 4, 0x12, 0x34, 0x56, 0x78],
-        to_vec_manuel::<ExampleOptions, _>(&bytes, &SOMEIP_TYPE).unwrap()
+        to_x_manuel::<ExampleOptions, _, _>(&bytes, &SOMEIP_TYPE, Vec::default()).unwrap()
     );
 
     bytes.put_u32(0x90ABCDEF);
     assert_eq!(
         vec![0, 8, 0x12, 0x34, 0x56, 0x78, 0x90, 0xAB, 0xCD, 0xEF],
-        to_vec_manuel::<ExampleOptions, _>(&bytes, &SOMEIP_TYPE).unwrap()
+        to_x_manuel::<ExampleOptions, _, _>(&bytes, &SOMEIP_TYPE, Vec::default()).unwrap()
     );
 }
 
@@ -955,7 +1002,7 @@ fn test_bytes_no_length_field() {
     bytes.put_u32(0x12345678);
     assert_eq!(
         vec![0x12, 0x34, 0x56, 0x78],
-        to_vec_manuel::<ExampleOptions, _>(&bytes, &SOMEIP_TYPE).unwrap()
+        to_x_manuel::<ExampleOptions, _, _>(&bytes, &SOMEIP_TYPE, Vec::default()).unwrap()
     );
 }
 
@@ -971,7 +1018,7 @@ fn test_i16_seq() {
     let values = vec![42i16, -5];
     assert_eq!(
         vec![0, 4, 0, 42, 0xFF, 0xFB],
-        to_vec_manuel::<ExampleOptions, _>(&values, &SOMEIP_TYPE).unwrap()
+        to_x_manuel::<ExampleOptions, _, _>(&values, &SOMEIP_TYPE, Vec::default()).unwrap()
     );
 }
 
@@ -987,7 +1034,7 @@ fn test_i16_seq_no_length_field() {
     let values = vec![42i16, -5, 1, 1337];
     assert_eq!(
         vec![0, 42, 0xFF, 0xFB, 0, 1, 0x5, 0x39],
-        to_vec_manuel::<ExampleOptions, _>(&values, &SOMEIP_TYPE).unwrap()
+        to_x_manuel::<ExampleOptions, _, _>(&values, &SOMEIP_TYPE, Vec::default()).unwrap()
     );
 }
 
@@ -1008,7 +1055,7 @@ fn test_2_dimensional_seq() {
     let values = vec![vec![1i8, -2, 3], vec![42], vec![]];
     assert_eq!(
         vec![0, 7, 3, 1, 0xFE, 3, 1, 42, 0],
-        to_vec_manuel::<ExampleOptions, _>(&values, &SOMEIP_TYPE).unwrap()
+        to_x_manuel::<ExampleOptions, _, _>(&values, &SOMEIP_TYPE, Vec::default()).unwrap()
     );
 }
 
@@ -1022,7 +1069,7 @@ fn test_string() {
 
     assert_eq!(
         vec![2, 0x68, 0x69],
-        to_vec_manuel::<ExampleOptions, _>(&"hi", &SOMEIP_TYPE).unwrap()
+        to_x_manuel::<ExampleOptions, _, _>(&"hi", &SOMEIP_TYPE, Vec::default()).unwrap()
     );
 }
 
@@ -1036,7 +1083,7 @@ fn test_string_no_length_field() {
 
     assert_eq!(
         vec![0x68, 0x69],
-        to_vec_manuel::<ExampleOptions, _>(&"hi", &SOMEIP_TYPE).unwrap()
+        to_x_manuel::<ExampleOptions, _, _>(&"hi", &SOMEIP_TYPE, Vec::default()).unwrap()
     );
 }
 
@@ -1054,7 +1101,7 @@ fn test_string_utf8_bom() {
 
     assert_eq!(
         vec![5, 0xEF, 0xBB, 0xBF, 0x68, 0x69],
-        to_vec_manuel::<Options, _>(&"hi", &SOMEIP_TYPE).unwrap()
+        to_x_manuel::<Options, _, _>(&"hi", &SOMEIP_TYPE, Vec::default()).unwrap()
     );
 }
 
@@ -1072,7 +1119,7 @@ fn test_string_utf8_terminator() {
 
     assert_eq!(
         vec![3, 0x68, 0x69, 0],
-        to_vec_manuel::<Options, _>(&"hi", &SOMEIP_TYPE).unwrap()
+        to_x_manuel::<Options, _, _>(&"hi", &SOMEIP_TYPE, Vec::default()).unwrap()
     );
 }
 
@@ -1091,7 +1138,7 @@ fn test_string_utf16() {
 
     assert_eq!(
         vec![4, 0, 0x68, 0, 0x69],
-        to_vec_manuel::<Options, _>(&"hi", &SOMEIP_TYPE).unwrap()
+        to_x_manuel::<Options, _, _>(&"hi", &SOMEIP_TYPE, Vec::default()).unwrap()
     );
 }
 
@@ -1110,7 +1157,7 @@ fn test_string_utf16_bom() {
 
     assert_eq!(
         vec![6, 0xFE, 0xFF, 0, 0x68, 0, 0x69],
-        to_vec_manuel::<Options, _>(&"hi", &SOMEIP_TYPE).unwrap()
+        to_x_manuel::<Options, _, _>(&"hi", &SOMEIP_TYPE, Vec::default()).unwrap()
     );
 }
 
@@ -1130,7 +1177,7 @@ fn test_string_utf16_bom_le() {
 
     assert_eq!(
         vec![6, 0xFF, 0xFE, 0x68, 0, 0x69, 0],
-        to_vec_manuel::<Options, _>(&"hi", &SOMEIP_TYPE).unwrap()
+        to_x_manuel::<Options, _, _>(&"hi", &SOMEIP_TYPE, Vec::default()).unwrap()
     );
 }
 
@@ -1149,7 +1196,7 @@ fn test_string_utf16_terminator() {
 
     assert_eq!(
         vec![6, 0, 0x68, 0, 0x69, 0, 0],
-        to_vec_manuel::<Options, _>(&"hi", &SOMEIP_TYPE).unwrap()
+        to_x_manuel::<Options, _, _>(&"hi", &SOMEIP_TYPE, Vec::default()).unwrap()
     );
 }
 
