@@ -30,7 +30,7 @@ fn main() {
 }
 ```
 
-For more attributes used by `derive(SomeIp)` see the [macro doc](https://docs.rs/serde_someip/0.1.1/serde_someip/derive.SomeIp.html).
+For more attributes used by `derive(SomeIp)` see the [macro doc](https://docs.rs/serde_someip/latest/serde_someip/derive.SomeIp.html).
 
 ## Available features
 
