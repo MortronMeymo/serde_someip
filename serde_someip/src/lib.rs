@@ -159,6 +159,24 @@ extern crate serde_someip_derive;
 ///     bar: Option<f64>,
 /// };
 /// ```
+///
+/// # `treat_as`
+/// You can use `treat_as` to workaround types that someip does not know.
+/// For example with typedefs or using the bytes crate:
+/// ```
+/// # use serde_someip::SomeIp;
+/// use bytes::Bytes;
+/// type ABunchOfInts = Vec<u32>;
+///
+/// #[derive(SomeIp)]
+/// struct AStruct {
+///     #[someip(treat_as = Vec<u32>, max_elements = 32)]
+///     ints: ABunchOfInts,
+///     #[someip(treat_as = [u8], max_elements = 1024)]
+///     bytes: Bytes,
+/// }
+/// ```
+/// Warning: If you lie to someip about what your type is your program will panic.
 pub use serde_someip_derive::SomeIp;
 
 #[cfg(feature = "derive")]
