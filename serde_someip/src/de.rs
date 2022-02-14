@@ -2186,3 +2186,47 @@ fn test_unkown_ids() {
         from_slice::<ExampleOptions, Test>(&serialized).unwrap()
     )
 }
+
+#[test]
+fn test_struct_in_struct() {
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    struct Inner {
+        some_field: u32,
+    }
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    struct Outer {
+        inner: Option<Inner>,
+    }
+
+    impl SomeIp for Outer {
+        const SOMEIP_TYPE: SomeIpType = SomeIpType::Struct(SomeIpStruct {
+            is_message_wrapper: false,
+            length_field_size: None,
+            name: "Outer",
+            uses_tlv_serialization: true,
+            fields: &[SomeIpField {
+                id: Some(1),
+                name: "inner",
+                field_type: &SomeIpType::Struct(SomeIpStruct {
+                    is_message_wrapper: false,
+                    length_field_size: None,
+                    name: "Inner",
+                    uses_tlv_serialization: true,
+                    fields: &[SomeIpField {
+                        id: Some(1),
+                        name: "some_field",
+                        field_type: &u32::SOMEIP_TYPE,
+                    }],
+                }),
+            }],
+        });
+    }
+
+    let expected = Outer { inner: None };
+
+    let serialized = vec![0, 0, 0, 0];
+    assert_eq!(
+        expected,
+        from_slice::<ExampleOptions, Outer>(&serialized).unwrap()
+    );
+}

@@ -375,10 +375,12 @@ impl<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> SerializeStruct
             self.serializer.next_type = field.field_type;
             value.serialize(&mut *self.serializer)?;
             if wire_type == WireType::LengthDelimitedFromConfig {
-                let (actual, is_as_configured) = self.serializer.last_length_field.take().unwrap();
-                if !is_as_configured || !Options::SERIALIZER_USE_LEGACY_WIRE_TYPE {
-                    let tag = u16::from(WireType::from(actual)) | field.id.unwrap();
-                    self.serializer.write_at_previous_pos(tag_pos, tag)?;
+                //will be None if value was None
+                if let Some((actual, is_as_configured)) = self.serializer.last_length_field.take() {
+                    if !is_as_configured || !Options::SERIALIZER_USE_LEGACY_WIRE_TYPE {
+                        let tag = u16::from(WireType::from(actual)) | field.id.unwrap();
+                        self.serializer.write_at_previous_pos(tag_pos, tag)?;
+                    }
                 }
             }
             Ok(())
@@ -1564,4 +1566,46 @@ fn test_append_to_vec() {
     let mut result = Vec::default();
     append_to_vec::<ExampleOptions, _>(&Test("hi".into()), &mut result).unwrap();
     assert_eq!(vec![2, 0x68, 0x69], result);
+}
+
+#[test]
+fn test_struct_in_struct() {
+    #[derive(Debug, serde::Serialize)]
+    struct Inner {
+        some_field: u32,
+    }
+    #[derive(Debug, serde::Serialize)]
+    struct Outer {
+        inner: Option<Inner>,
+    }
+
+    impl SomeIp for Outer {
+        const SOMEIP_TYPE: SomeIpType = SomeIpType::Struct(SomeIpStruct {
+            is_message_wrapper: false,
+            length_field_size: None,
+            name: "Outer",
+            uses_tlv_serialization: true,
+            fields: &[SomeIpField {
+                id: Some(1),
+                name: "inner",
+                field_type: &SomeIpType::Struct(SomeIpStruct {
+                    is_message_wrapper: false,
+                    length_field_size: None,
+                    name: "Inner",
+                    uses_tlv_serialization: true,
+                    fields: &[SomeIpField {
+                        id: Some(1),
+                        name: "some_field",
+                        field_type: &u32::SOMEIP_TYPE,
+                    }],
+                }),
+            }],
+        });
+    }
+
+    let outer = Outer { inner: None };
+
+    let mut result = Vec::default();
+    append_to_vec::<ExampleOptions, _>(&outer, &mut result).unwrap();
+    assert_eq!(vec![0, 0, 0, 0], result);
 }
