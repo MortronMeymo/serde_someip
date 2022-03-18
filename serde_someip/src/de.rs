@@ -440,7 +440,7 @@ where
                     self.discard(len)?;
                 } else {
                     self.next_length_field_size = wire_type.get_length_field_size();
-                    let lfsize = Options::overwrite_length_field_size(s.length_field_size)
+                    let lfsize = overwrite_length_field_size::<Options>(s.length_field_size)
                         .unwrap_or_else(|| {
                             panic!(
                             "Require a length field size to deserialize unknon id {} in struct {}",

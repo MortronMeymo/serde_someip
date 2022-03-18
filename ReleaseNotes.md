@@ -1,5 +1,10 @@
 # Releases of `serde_someip`
 
+## 0.2.0 - Not yet released
+
+- Fix some typos in error messages
+- Remove some accidentaly public methods from `SomeIpOptions` trait
+
 ## 0.1.3
 
 - Fix panic when serializing a `None` for a field in a tlv struct

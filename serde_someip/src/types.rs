@@ -3,7 +3,7 @@
 
 use super::error::Result;
 use super::length_fields::LengthFieldSize;
-use super::options::SomeIpOptions;
+use super::options::{overwrite_length_field_size, select_length_field_size, SomeIpOptions};
 use super::wire_type::WireType;
 use std::fmt::{Display, Formatter};
 
@@ -219,7 +219,7 @@ impl SomeIpSize for SomeIpString {
         is_in_tlv_struct: bool,
     ) -> Result<Option<LengthFieldSize>> {
         if !self.is_const_size() || is_in_tlv_struct {
-            let size = Options::overwrite_length_field_size(self.length_field_size);
+            let size = overwrite_length_field_size::<Options>(self.length_field_size);
             if size.is_none() {
                 panic!("Required a length field size but none was specified");
             }
@@ -237,7 +237,7 @@ impl SomeIpSize for SomeIpString {
     fn max_len<Options: SomeIpOptions + ?Sized>(&self, is_in_tlv_struct: bool) -> Result<usize> {
         let size = self.wanted_length_field::<Options>(is_in_tlv_struct)?;
         if let Some(size) = size {
-            let size = Options::select_length_field_size(size, self.max_size, is_in_tlv_struct)?;
+            let size = select_length_field_size::<Options>(size, self.max_size, is_in_tlv_struct)?;
             Ok(self.max_size + usize::from(size))
         } else {
             Ok(self.max_size)
@@ -356,7 +356,7 @@ impl SomeIpSize for SomeIpSequence {
         is_in_tlv_struct: bool,
     ) -> Result<Option<LengthFieldSize>> {
         if !self.is_const_size() || is_in_tlv_struct {
-            let size = Options::overwrite_length_field_size(self.length_field_size);
+            let size = overwrite_length_field_size::<Options>(self.length_field_size);
             if size.is_none() {
                 panic!("Required a length field size but none was specified");
             }
@@ -375,7 +375,7 @@ impl SomeIpSize for SomeIpSequence {
         let size = self.wanted_length_field::<Options>(is_in_tlv_struct)?;
         let len = self.max_elements * self.element_type.max_len::<Options>(false)?;
         if let Some(size) = size {
-            let size = Options::select_length_field_size(size, len, is_in_tlv_struct)?;
+            let size = select_length_field_size::<Options>(size, len, is_in_tlv_struct)?;
             Ok(len + usize::from(size))
         } else {
             Ok(len)
@@ -395,7 +395,7 @@ impl SomeIpSize for SomeIpStruct {
         let needs_length_field = is_in_tlv_struct || self.uses_tlv();
         let mut size = None;
         if needs_length_field || self.length_field_size.is_some() {
-            size = Options::overwrite_length_field_size(self.length_field_size);
+            size = overwrite_length_field_size::<Options>(self.length_field_size);
         }
         if needs_length_field && size.is_none() {
             panic!(
@@ -420,7 +420,7 @@ impl SomeIpSize for SomeIpStruct {
                 .max_len::<Options>(self.uses_tlv_serialization)?;
         }
         if let Some(size) = size {
-            let size = Options::select_length_field_size(size, len, is_in_tlv_struct)?;
+            let size = select_length_field_size::<Options>(size, len, is_in_tlv_struct)?;
             Ok(len + usize::from(size))
         } else {
             Ok(len)

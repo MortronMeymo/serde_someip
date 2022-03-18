@@ -218,49 +218,48 @@ pub trait SomeIpOptions {
     {
         super::append_to_bytes::<Self, _>(value, bytes)
     }
+}
 
-    #[doc(hidden)]
-    #[inline]
-    fn overwrite_length_field_size(from_type: Option<LengthFieldSize>) -> Option<LengthFieldSize> {
-        if Self::OVERWRITE_LENGTH_FIELD_SIZE.is_some() {
-            Self::OVERWRITE_LENGTH_FIELD_SIZE
-        } else if from_type.is_some() {
-            from_type
-        } else {
-            Self::DEFAULT_LENGTH_FIELD_SIZE
-        }
-    }
-
-    #[doc(hidden)]
-    #[inline]
-    fn select_length_field_size(
-        configured: LengthFieldSize,
-        len: usize,
-        is_in_tlv_struct: bool,
-    ) -> Result<LengthFieldSize> {
-        let minimum_needed = LengthFieldSize::minimum_length_for(len);
-        if is_in_tlv_struct {
-            match Self::SERIALIZER_LENGTH_FIELD_SIZE_SELECTION {
-                LengthFieldSizeSelection::AsConfigured => {
-                    if minimum_needed <= configured {
-                        Ok(configured)
-                    } else {
-                        Ok(minimum_needed)
-                    }
-                }
-                LengthFieldSizeSelection::Smallest => Ok(minimum_needed),
-            }
-        } else if configured < minimum_needed {
-            Err(Error::TooLong {
-                actual_length: len,
-                length_field_size: configured,
-            })
-        } else {
-            Ok(configured)
-        }
+#[inline]
+pub(crate) fn overwrite_length_field_size<T: SomeIpOptions + ?Sized>(
+    from_type: Option<LengthFieldSize>,
+) -> Option<LengthFieldSize> {
+    if T::OVERWRITE_LENGTH_FIELD_SIZE.is_some() {
+        T::OVERWRITE_LENGTH_FIELD_SIZE
+    } else if from_type.is_some() {
+        from_type
+    } else {
+        T::DEFAULT_LENGTH_FIELD_SIZE
     }
 }
 
+#[inline]
+pub(crate) fn select_length_field_size<T: SomeIpOptions + ?Sized>(
+    configured: LengthFieldSize,
+    len: usize,
+    is_in_tlv_struct: bool,
+) -> Result<LengthFieldSize> {
+    let minimum_needed = LengthFieldSize::minimum_length_for(len);
+    if is_in_tlv_struct {
+        match T::SERIALIZER_LENGTH_FIELD_SIZE_SELECTION {
+            LengthFieldSizeSelection::AsConfigured => {
+                if minimum_needed <= configured {
+                    Ok(configured)
+                } else {
+                    Ok(minimum_needed)
+                }
+            }
+            LengthFieldSizeSelection::Smallest => Ok(minimum_needed),
+        }
+    } else if configured < minimum_needed {
+        Err(Error::TooLong {
+            actual_length: len,
+            length_field_size: configured,
+        })
+    } else {
+        Ok(configured)
+    }
+}
 /// This macro can be used to quickly provide the different options possible for [OVERWRITE_LENGTH_FIELD_SIZE](SomeIpOptions::OVERWRITE_LENGTH_FIELD_SIZE).
 ///
 /// ```

@@ -443,7 +443,7 @@ impl<Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> SomeIpSerializer<Opt
         let end = self.writer.len();
         let len = end - pos - usize::from(reserved);
 
-        let actual = Options::select_length_field_size(configured, len, was_in_tlv)?;
+        let actual = select_length_field_size::<Options>(configured, len, was_in_tlv)?;
         self.last_length_field = Some((actual, actual == configured));
 
         if actual != reserved {
