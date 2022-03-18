@@ -32,6 +32,8 @@ fn main() {
 
 For more attributes used by `derive(SomeIp)` see the [macro doc](https://docs.rs/serde_someip/latest/serde_someip/derive.SomeIp.html).
 
+Also feel free to read the [release notes](https://github.com/MortronMeymo/serde_someip/blob/master/ReleaseNotes.md)
+
 ## Available features
 
 - `derive`: Enables the `SomeIp` derive macro
