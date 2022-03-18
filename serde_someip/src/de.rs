@@ -325,7 +325,7 @@ where
                 value.pop();
             } else {
                 return Err(Error::CannotCodeString(
-                    "String muse end with 0 terminator".into(),
+                    "String must end with 0 terminator".into(),
                 ));
             }
         }
@@ -417,7 +417,7 @@ where
         if Options::STRING_WITH_TERMINATOR {
             if !string.ends_with('\0') {
                 return Err(Error::CannotCodeString(
-                    "String msut end with 0 terminator".into(),
+                    "String must end with 0 terminator".into(),
                 ));
             }
             string.pop();
@@ -842,7 +842,7 @@ where
                     value = v;
                 } else {
                     return Err(Error::CannotCodeString(
-                        "String muse end with 0 terminator".into(),
+                        "String must end with 0 terminator".into(),
                     ));
                 }
             }
