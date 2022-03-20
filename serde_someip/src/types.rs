@@ -3,7 +3,7 @@
 
 use super::error::Result;
 use super::length_fields::LengthFieldSize;
-use super::options::{overwrite_length_field_size, select_length_field_size, SomeIpOptions};
+use super::options::{apply_defaults, select_length_field_size, SomeIpOptions};
 use super::wire_type::WireType;
 use std::fmt::{Display, Formatter};
 
@@ -11,9 +11,14 @@ pub(crate) trait SomeIpSize {
     fn wanted_length_field<Options: SomeIpOptions + ?Sized>(
         &self,
         is_in_tlv_struct: bool,
+        transformation_props: &Option<SomeIpTransforationProperties>,
     ) -> Result<Option<LengthFieldSize>>;
     fn is_const_size(&self) -> bool;
-    fn max_len<Options: SomeIpOptions + ?Sized>(&self, is_in_tlv_struct: bool) -> Result<usize>;
+    fn max_len<Options: SomeIpOptions + ?Sized>(
+        &self,
+        is_in_tlv_struct: bool,
+        transformation_props: &Option<SomeIpTransforationProperties>,
+    ) -> Result<usize>;
 }
 
 /// All primitives defined by SomeIp.
@@ -217,9 +222,11 @@ impl SomeIpSize for SomeIpString {
     fn wanted_length_field<Options: SomeIpOptions + ?Sized>(
         &self,
         is_in_tlv_struct: bool,
+        props: &Option<SomeIpTransforationProperties>,
     ) -> Result<Option<LengthFieldSize>> {
         if !self.is_const_size() || is_in_tlv_struct {
-            let size = overwrite_length_field_size::<Options>(self.length_field_size);
+            let size =
+                apply_defaults::<Options>(props.get_string_length_field(self.length_field_size));
             if size.is_none() {
                 panic!("Required a length field size but none was specified");
             }
@@ -234,8 +241,12 @@ impl SomeIpSize for SomeIpString {
         self.min_size == self.max_size
     }
 
-    fn max_len<Options: SomeIpOptions + ?Sized>(&self, is_in_tlv_struct: bool) -> Result<usize> {
-        let size = self.wanted_length_field::<Options>(is_in_tlv_struct)?;
+    fn max_len<Options: SomeIpOptions + ?Sized>(
+        &self,
+        is_in_tlv_struct: bool,
+        props: &Option<SomeIpTransforationProperties>,
+    ) -> Result<usize> {
+        let size = self.wanted_length_field::<Options>(is_in_tlv_struct, props)?;
         if let Some(size) = size {
             let size = select_length_field_size::<Options>(size, self.max_size, is_in_tlv_struct)?;
             Ok(self.max_size + usize::from(size))
@@ -269,6 +280,88 @@ pub struct SomeIpField {
     pub field_type: &'static SomeIpType,
 }
 
+/// The SomeIp transformation properties as defined by arxml.
+/// This can be used to define the length fields for all types used by a struct.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SomeIpTransforationProperties {
+    /// The size of length fields for arrays.
+    pub size_of_array_length_field: Option<LengthFieldSize>,
+    /// The size of length fields for structs.
+    pub size_of_struct_length_field: Option<LengthFieldSize>,
+    /// The size of length fields for strings.
+    pub size_of_string_length_field: Option<LengthFieldSize>,
+}
+
+trait SomeIpTransforationPropertiesExt {
+    fn get_array_length_field(&self, from_type: Option<LengthFieldSize>)
+        -> Option<LengthFieldSize>;
+    fn get_struct_length_field(
+        &self,
+        from_type: Option<LengthFieldSize>,
+    ) -> Option<LengthFieldSize>;
+    fn get_string_length_field(
+        &self,
+        from_type: Option<LengthFieldSize>,
+    ) -> Option<LengthFieldSize>;
+}
+
+impl SomeIpTransforationPropertiesExt for SomeIpTransforationProperties {
+    #[inline]
+    fn get_array_length_field(
+        &self,
+        from_type: Option<LengthFieldSize>,
+    ) -> Option<LengthFieldSize> {
+        self.size_of_array_length_field.or(from_type)
+    }
+    #[inline]
+    fn get_struct_length_field(
+        &self,
+        from_type: Option<LengthFieldSize>,
+    ) -> Option<LengthFieldSize> {
+        self.size_of_struct_length_field.or(from_type)
+    }
+    #[inline]
+    fn get_string_length_field(
+        &self,
+        from_type: Option<LengthFieldSize>,
+    ) -> Option<LengthFieldSize> {
+        self.size_of_string_length_field.or(from_type)
+    }
+}
+
+impl SomeIpTransforationPropertiesExt for Option<SomeIpTransforationProperties> {
+    #[inline]
+    fn get_array_length_field(
+        &self,
+        from_type: Option<LengthFieldSize>,
+    ) -> Option<LengthFieldSize> {
+        match self {
+            Some(p) => p.get_array_length_field(from_type),
+            None => from_type,
+        }
+    }
+    #[inline]
+    fn get_struct_length_field(
+        &self,
+        from_type: Option<LengthFieldSize>,
+    ) -> Option<LengthFieldSize> {
+        match self {
+            Some(p) => p.get_struct_length_field(from_type),
+            None => from_type,
+        }
+    }
+    #[inline]
+    fn get_string_length_field(
+        &self,
+        from_type: Option<LengthFieldSize>,
+    ) -> Option<LengthFieldSize> {
+        match self {
+            Some(p) => p.get_string_length_field(from_type),
+            None => from_type,
+        }
+    }
+}
+
 /// All the data needed to de/serialize a struct.
 #[derive(Debug, PartialEq, Eq)]
 pub struct SomeIpStruct {
@@ -284,6 +377,8 @@ pub struct SomeIpStruct {
     pub is_message_wrapper: bool,
     /// The length field size to use for this struct.
     pub length_field_size: Option<LengthFieldSize>,
+    /// The transformation properties to use for all types in this struct.
+    pub transformation_properties: Option<SomeIpTransforationProperties>,
 }
 
 impl SomeIpStruct {
@@ -354,9 +449,11 @@ impl SomeIpSize for SomeIpSequence {
     fn wanted_length_field<Options: SomeIpOptions + ?Sized>(
         &self,
         is_in_tlv_struct: bool,
+        props: &Option<SomeIpTransforationProperties>,
     ) -> Result<Option<LengthFieldSize>> {
         if !self.is_const_size() || is_in_tlv_struct {
-            let size = overwrite_length_field_size::<Options>(self.length_field_size);
+            let size =
+                apply_defaults::<Options>(props.get_array_length_field(self.length_field_size));
             if size.is_none() {
                 panic!("Required a length field size but none was specified");
             }
@@ -371,9 +468,13 @@ impl SomeIpSize for SomeIpSequence {
         self.min_elements == self.max_elements && self.element_type.is_const_size()
     }
 
-    fn max_len<Options: SomeIpOptions + ?Sized>(&self, is_in_tlv_struct: bool) -> Result<usize> {
-        let size = self.wanted_length_field::<Options>(is_in_tlv_struct)?;
-        let len = self.max_elements * self.element_type.max_len::<Options>(false)?;
+    fn max_len<Options: SomeIpOptions + ?Sized>(
+        &self,
+        is_in_tlv_struct: bool,
+        props: &Option<SomeIpTransforationProperties>,
+    ) -> Result<usize> {
+        let size = self.wanted_length_field::<Options>(is_in_tlv_struct, props)?;
+        let len = self.max_elements * self.element_type.max_len::<Options>(false, props)?;
         if let Some(size) = size {
             let size = select_length_field_size::<Options>(size, len, is_in_tlv_struct)?;
             Ok(len + usize::from(size))
@@ -387,6 +488,7 @@ impl SomeIpSize for SomeIpStruct {
     fn wanted_length_field<Options: SomeIpOptions + ?Sized>(
         &self,
         is_in_tlv_struct: bool,
+        props: &Option<SomeIpTransforationProperties>,
     ) -> Result<Option<LengthFieldSize>> {
         if self.is_message_wrapper {
             return Ok(None);
@@ -395,7 +497,7 @@ impl SomeIpSize for SomeIpStruct {
         let needs_length_field = is_in_tlv_struct || self.uses_tlv();
         let mut size = None;
         if needs_length_field || self.length_field_size.is_some() {
-            size = overwrite_length_field_size::<Options>(self.length_field_size);
+            size = apply_defaults::<Options>(props.get_struct_length_field(self.length_field_size));
         }
         if needs_length_field && size.is_none() {
             panic!(
@@ -411,13 +513,17 @@ impl SomeIpSize for SomeIpStruct {
         !self.uses_tlv() && self.fields.iter().all(|f| f.field_type.is_const_size())
     }
 
-    fn max_len<Options: SomeIpOptions + ?Sized>(&self, is_in_tlv_struct: bool) -> Result<usize> {
-        let size = self.wanted_length_field::<Options>(is_in_tlv_struct)?;
+    fn max_len<Options: SomeIpOptions + ?Sized>(
+        &self,
+        is_in_tlv_struct: bool,
+        props: &Option<SomeIpTransforationProperties>,
+    ) -> Result<usize> {
+        let size = self.wanted_length_field::<Options>(is_in_tlv_struct, props)?;
         let mut len = 0;
         for f in self.fields {
             len += f
                 .field_type
-                .max_len::<Options>(self.uses_tlv_serialization)?;
+                .max_len::<Options>(self.uses_tlv_serialization, props)?;
         }
         if let Some(size) = size {
             let size = select_length_field_size::<Options>(size, len, is_in_tlv_struct)?;
@@ -433,12 +539,13 @@ impl SomeIpSize for SomeIpType {
     fn wanted_length_field<Options: SomeIpOptions + ?Sized>(
         &self,
         is_in_tlv_struct: bool,
+        props: &Option<SomeIpTransforationProperties>,
     ) -> Result<Option<LengthFieldSize>> {
         match self {
             SomeIpType::Primitive(_) | SomeIpType::Enum(_) => Ok(None),
-            SomeIpType::String(s) => s.wanted_length_field::<Options>(is_in_tlv_struct),
-            SomeIpType::Sequence(s) => s.wanted_length_field::<Options>(is_in_tlv_struct),
-            SomeIpType::Struct(s) => s.wanted_length_field::<Options>(is_in_tlv_struct),
+            SomeIpType::String(s) => s.wanted_length_field::<Options>(is_in_tlv_struct, props),
+            SomeIpType::Sequence(s) => s.wanted_length_field::<Options>(is_in_tlv_struct, props),
+            SomeIpType::Struct(s) => s.wanted_length_field::<Options>(is_in_tlv_struct, props),
         }
     }
 
@@ -453,13 +560,17 @@ impl SomeIpSize for SomeIpType {
     }
 
     #[inline]
-    fn max_len<Options: SomeIpOptions + ?Sized>(&self, is_in_tlv_struct: bool) -> Result<usize> {
+    fn max_len<Options: SomeIpOptions + ?Sized>(
+        &self,
+        is_in_tlv_struct: bool,
+        props: &Option<SomeIpTransforationProperties>,
+    ) -> Result<usize> {
         match self {
             SomeIpType::Primitive(prim) => Ok(prim.get_len()),
             SomeIpType::Enum(e) => Ok(e.raw_type.get_len()),
-            SomeIpType::String(s) => s.max_len::<Options>(is_in_tlv_struct),
-            SomeIpType::Sequence(s) => s.max_len::<Options>(is_in_tlv_struct),
-            SomeIpType::Struct(s) => s.max_len::<Options>(is_in_tlv_struct),
+            SomeIpType::String(s) => s.max_len::<Options>(is_in_tlv_struct, props),
+            SomeIpType::Sequence(s) => s.max_len::<Options>(is_in_tlv_struct, props),
+            SomeIpType::Struct(s) => s.max_len::<Options>(is_in_tlv_struct, props),
         }
     }
 }

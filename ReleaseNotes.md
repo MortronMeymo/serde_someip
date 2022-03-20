@@ -1,7 +1,9 @@
 # Releases of `serde_someip`
 
-## 0.2.0 - Not yet released
+## 0.2.0
 
+- Breaking change: Remove `OVERWRITE_LENGTH_FIELD_SIZE` from `SomeIpOptions`. Since this is not really a global option this functionality was moved to the `SomeIp` trait on the de/serialized type.
+- Add `arrays_length_field_size`, `structs_length_field_size`, `strings_length_field_size` to attributes for structs to mirror someip transformer properties from autosar. This replaces `OVERWRITE_LENGTH_FIELD_SIZE` from `SomeIpOptions`.
 - Fix some typos in error messages
 - Remove some accidentaly public methods from `SomeIpOptions` trait
 

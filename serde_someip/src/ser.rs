@@ -240,8 +240,10 @@ impl<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter>
                 }
             }
 
-            let length_field_size =
-                s.wanted_length_field::<Options>(serializer.is_in_tlv_struct)?;
+            let length_field_size = s.wanted_length_field::<Options>(
+                serializer.is_in_tlv_struct,
+                &serializer.transformation_props,
+            )?;
 
             Ok(SomeIpSeqSerializer {
                 serializer,
@@ -258,10 +260,10 @@ impl<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter>
         if let Some(configured) = self.length_field_size {
             self.serializer.begin_length_delimited_section(
                 configured,
-                LengthFieldSize::minimum_length_for(
-                    self.someip_type
-                        .max_len::<Options>(self.serializer.is_in_tlv_struct)?,
-                ),
+                LengthFieldSize::minimum_length_for(self.someip_type.max_len::<Options>(
+                    self.serializer.is_in_tlv_struct,
+                    &self.serializer.transformation_props,
+                )?),
             )?;
         }
         Ok(())
@@ -304,6 +306,7 @@ struct SomeIpStructSerializer<'a, Options: SomeIpOptions + ?Sized, Writer: SomeI
     serializer: &'a mut SomeIpSerializer<Options, Writer>,
     struct_type: &'static SomeIpStruct,
     length_field_size: Option<LengthFieldSize>,
+    original_transformation_props: Option<SomeIpTransforationProperties>,
 }
 
 impl<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter>
@@ -314,12 +317,23 @@ impl<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter>
             if len != s.field_count() {
                 panic!("Cannot serialize more fields than struct {} has", s.name);
             }
-            let length_field_size =
-                s.wanted_length_field::<Options>(serializer.is_in_tlv_struct)?;
+            let original_transformation_props = if s.transformation_properties.is_some() {
+                std::mem::replace(
+                    &mut serializer.transformation_props,
+                    s.transformation_properties.clone(),
+                )
+            } else {
+                None
+            };
+            let length_field_size = s.wanted_length_field::<Options>(
+                serializer.is_in_tlv_struct,
+                &serializer.transformation_props,
+            )?;
             Ok(SomeIpStructSerializer {
                 serializer,
                 struct_type: s,
                 length_field_size,
+                original_transformation_props,
             })
         } else {
             panic!("Expeceted a struct but found {}", serializer.next_type)
@@ -330,10 +344,10 @@ impl<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter>
         if let Some(configured) = self.length_field_size {
             self.serializer.begin_length_delimited_section(
                 configured,
-                LengthFieldSize::minimum_length_for(
-                    self.struct_type
-                        .max_len::<Options>(self.serializer.is_in_tlv_struct)?,
-                ),
+                LengthFieldSize::minimum_length_for(self.struct_type.max_len::<Options>(
+                    self.serializer.is_in_tlv_struct,
+                    &self.serializer.transformation_props,
+                )?),
             )?;
         }
         Ok(())
@@ -396,6 +410,9 @@ impl<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> SerializeStruct
             self.serializer.end_length_delimited_section(s)?;
         }
         self.serializer.is_in_tlv_struct = false;
+        if self.struct_type.transformation_properties.is_some() {
+            self.serializer.transformation_props = self.original_transformation_props;
+        }
         Ok(())
     }
 }
@@ -406,6 +423,7 @@ struct SomeIpSerializer<Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> {
     is_in_tlv_struct: bool,
     last_length_field: Option<(LengthFieldSize, bool)>,
     length_delimited_sections: Vec<(usize, LengthFieldSize, bool)>,
+    transformation_props: Option<SomeIpTransforationProperties>,
     phantom: PhantomData<Options>,
 }
 
@@ -417,6 +435,7 @@ impl<Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> SomeIpSerializer<Opt
             is_in_tlv_struct: false,
             last_length_field: None,
             length_delimited_sections: Vec::default(),
+            transformation_props: None,
             phantom: PhantomData,
         }
     }
@@ -594,13 +613,16 @@ impl<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> Serializer
                 ));
             }
 
-            let length_field_size = s.wanted_length_field::<Options>(self.is_in_tlv_struct)?;
+            let length_field_size = s.wanted_length_field::<Options>(
+                self.is_in_tlv_struct,
+                &self.transformation_props,
+            )?;
 
             if let Some(configured) = length_field_size {
                 self.begin_length_delimited_section(
                     configured,
                     LengthFieldSize::minimum_length_for(
-                        s.max_len::<Options>(self.is_in_tlv_struct)?,
+                        s.max_len::<Options>(self.is_in_tlv_struct, &self.transformation_props)?,
                     ),
                 )?;
             }
@@ -654,13 +676,16 @@ impl<'a, Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> Serializer
                 });
             }
 
-            let length_field_size = s.wanted_length_field::<Options>(self.is_in_tlv_struct)?;
+            let length_field_size = s.wanted_length_field::<Options>(
+                self.is_in_tlv_struct,
+                &self.transformation_props,
+            )?;
 
             if let Some(configured) = length_field_size {
                 self.begin_length_delimited_section(
                     configured,
                     LengthFieldSize::minimum_length_for(
-                        s.max_len::<Options>(self.is_in_tlv_struct)?,
+                        s.max_len::<Options>(self.is_in_tlv_struct, &self.transformation_props)?,
                     ),
                 )?;
             }
@@ -1300,6 +1325,7 @@ fn test_struct() {
             uses_tlv_serialization: false,
             is_message_wrapper: false,
             length_field_size: None,
+            transformation_properties: None,
         });
     }
 
@@ -1351,6 +1377,7 @@ fn test_struct_beginning_length_field() {
             uses_tlv_serialization: false,
             is_message_wrapper: false,
             length_field_size: Some(LengthFieldSize::TwoBytes),
+            transformation_properties: None,
         });
     }
 
@@ -1402,6 +1429,7 @@ fn test_struct_tlv() {
             uses_tlv_serialization: true,
             is_message_wrapper: false,
             length_field_size: Some(LengthFieldSize::TwoBytes),
+            transformation_properties: None,
         });
     }
 
@@ -1452,6 +1480,7 @@ fn test_struct_tlv_message_wrapper() {
             uses_tlv_serialization: true,
             is_message_wrapper: true,
             length_field_size: Some(LengthFieldSize::TwoBytes),
+            transformation_properties: None,
         });
     }
 
@@ -1488,6 +1517,7 @@ fn test_uses_smallest_length_field_size() {
             uses_tlv_serialization: true,
             is_message_wrapper: false,
             length_field_size: Some(LengthFieldSize::FourBytes),
+            transformation_properties: None,
         });
     }
 
@@ -1517,6 +1547,7 @@ fn test_optional() {
             uses_tlv_serialization: true,
             is_message_wrapper: false,
             length_field_size: Some(LengthFieldSize::OneByte),
+            transformation_properties: None,
         });
     }
 
@@ -1585,6 +1616,7 @@ fn test_struct_in_struct() {
             length_field_size: None,
             name: "Outer",
             uses_tlv_serialization: true,
+            transformation_properties: None,
             fields: &[SomeIpField {
                 id: Some(1),
                 name: "inner",
@@ -1593,6 +1625,7 @@ fn test_struct_in_struct() {
                     length_field_size: None,
                     name: "Inner",
                     uses_tlv_serialization: true,
+                    transformation_properties: None,
                     fields: &[SomeIpField {
                         id: Some(1),
                         name: "some_field",
@@ -1608,4 +1641,63 @@ fn test_struct_in_struct() {
     let mut result = Vec::default();
     append_to_vec::<ExampleOptions, _>(&outer, &mut result).unwrap();
     assert_eq!(vec![0, 0, 0, 0], result);
+}
+
+#[test]
+fn test_struct_with_props() {
+    #[derive(Debug, serde::Serialize)]
+    struct TestStruct {
+        a: String,
+        b: Vec<u16>,
+    }
+
+    impl SomeIp for TestStruct {
+        const SOMEIP_TYPE: SomeIpType = SomeIpType::Struct(SomeIpStruct {
+            is_message_wrapper: false,
+            length_field_size: None,
+            name: "TestStruct",
+            uses_tlv_serialization: true,
+            transformation_properties: Some(SomeIpTransforationProperties {
+                size_of_array_length_field: Some(LengthFieldSize::OneByte),
+                size_of_string_length_field: Some(LengthFieldSize::TwoBytes),
+                size_of_struct_length_field: Some(LengthFieldSize::FourBytes),
+            }),
+            fields: &[
+                SomeIpField {
+                    id: Some(1),
+                    name: "a",
+                    field_type: &SomeIpType::String(SomeIpString {
+                        min_size: 0,
+                        max_size: 1337,
+                        length_field_size: None,
+                    }),
+                },
+                SomeIpField {
+                    id: Some(2),
+                    name: "b",
+                    field_type: &SomeIpType::Sequence(SomeIpSequence {
+                        element_type: &u16::SOMEIP_TYPE,
+                        min_elements: 0,
+                        max_elements: 42,
+                        length_field_size: None,
+                    }),
+                },
+            ],
+        });
+    }
+
+    struct Options;
+    impl SomeIpOptions for Options {
+        const SERIALIZER_LENGTH_FIELD_SIZE_SELECTION: LengthFieldSizeSelection =
+            LengthFieldSizeSelection::AsConfigured;
+    }
+
+    let teste = TestStruct {
+        a: "".into(),
+        b: vec![42],
+    };
+
+    let mut result = Vec::default();
+    append_to_vec::<Options, _>(&teste, &mut result).unwrap();
+    assert_eq!(vec![0, 0, 0, 9, 0x60, 1, 0, 0, 0x50, 2, 2, 0, 42], result);
 }

@@ -112,7 +112,9 @@ extern crate serde_someip_derive;
 /// ```
 ///
 /// # Structs
-/// Structs can have a `message_wrapper` attribute as well as a `length_field_size` though neither are required.
+/// Structs can have `message_wrapper`, `length_field_size`, `arrays_length_field_size`, `structs_length_field_size` and a `strings_length_field_size` attribute
+/// though none are required. The three `xs_length_field_size` attributes correspond to similarily named values in the someip transformation properties of autosar.
+/// When present these attribtues will set the length_field_sizes for all matching types used in this struct.
 /// The `message_wrapper` attribute indicates that this struct is a wrapper for a someip message
 /// (the parameters/return values of a function call or the data of an event) this must be considered during de/serialization
 /// since such structs must not beginn with a length field.
@@ -128,7 +130,13 @@ extern crate serde_someip_derive;
 ///
 /// //example with all possible attributes
 /// #[derive(SomeIp)]
-/// #[someip(message_wrapper = true, length_field_size = 2)]
+/// #[someip(
+///     message_wrapper = true,
+///     length_field_size = 2,
+///     arrays_length_field_size = 2,
+///     structs_length_field_size = 2,
+///     strings_length_field_size = 2
+/// )]
 /// struct AnotherStruct {
 ///     #[someip(max_elements = 42)]
 ///     foo: Vec<f64>,

@@ -185,6 +185,7 @@ where
     next_field_name: &'static str,
     is_in_tlv_struct: bool,
     length_delimited_sections: Vec<usize>,
+    transformation_props: Option<SomeIpTransforationProperties>,
     phantom: PhantomData<Options>,
     phantom2: PhantomData<&'de str>,
 }
@@ -245,6 +246,7 @@ where
             next_field_name: "",
             is_in_tlv_struct: false,
             length_delimited_sections: Vec::default(),
+            transformation_props: None,
             phantom: PhantomData,
             phantom2: PhantomData,
         }
@@ -440,8 +442,8 @@ where
                     self.discard(len)?;
                 } else {
                     self.next_length_field_size = wire_type.get_length_field_size();
-                    let lfsize = overwrite_length_field_size::<Options>(s.length_field_size)
-                        .unwrap_or_else(|| {
+                    let lfsize =
+                        apply_defaults::<Options>(s.length_field_size).unwrap_or_else(|| {
                             panic!(
                             "Require a length field size to deserialize unknon id {} in struct {}",
                             id, s.name
@@ -586,7 +588,7 @@ where
         if self.sequence_type.element_type.is_const_size() {
             self.sequence_type
                 .element_type
-                .max_len::<Options>(false)
+                .max_len::<Options>(false, &self.deserializer.transformation_props)
                 .ok()
                 .map(|element_len| self.deserializer.remaining() / element_len)
         } else {
@@ -607,6 +609,7 @@ where
     in_section: bool,
     was_in_tlv: bool,
     field_index: usize,
+    original_transformation_props: Option<SomeIpTransforationProperties>,
 }
 
 impl<'de: 'a, 'a, Options, Reader> SomeIpStructAccess<'de, 'a, Options, Reader>
@@ -621,9 +624,18 @@ where
         someip_type: &'static SomeIpType,
         fields: &'static [&'static str],
     ) -> Result<Self> {
-        let in_section = if let Some(size) =
-            struct_type.wanted_length_field::<Options>(deserializer.is_in_tlv_struct)?
-        {
+        let original_transformation_props = if struct_type.transformation_properties.is_some() {
+            std::mem::replace(
+                &mut deserializer.transformation_props,
+                struct_type.transformation_properties.clone(),
+            )
+        } else {
+            None
+        };
+        let in_section = if let Some(size) = struct_type.wanted_length_field::<Options>(
+            deserializer.is_in_tlv_struct,
+            &deserializer.transformation_props,
+        )? {
             deserializer.begin_length_delimited_section(size)?;
             true
         } else {
@@ -638,6 +650,7 @@ where
             in_section,
             was_in_tlv,
             field_index: 0,
+            original_transformation_props,
         })
     }
 
@@ -647,6 +660,9 @@ where
             self.deserializer.end_length_delimited_section()?;
         }
         self.deserializer.is_in_tlv_struct = self.was_in_tlv;
+        if self.struct_type.transformation_properties.is_some() {
+            self.deserializer.transformation_props = self.original_transformation_props;
+        }
         Ok(())
     }
 }
@@ -796,7 +812,9 @@ where
         }
 
         if let SomeIpType::String(s) = self.next_type {
-            let len = if let Some(size) = s.wanted_length_field::<Options>(self.is_in_tlv_struct)? {
+            let len = if let Some(size) =
+                s.wanted_length_field::<Options>(self.is_in_tlv_struct, &self.transformation_props)?
+            {
                 self.begin_length_delimited_section(size)?
             } else {
                 self.begin_known_length_delimited_section(s.max_size)?
@@ -859,7 +877,9 @@ where
 
     fn deserialize_string<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         if let SomeIpType::String(s) = self.next_type {
-            let len = if let Some(size) = s.wanted_length_field::<Options>(self.is_in_tlv_struct)? {
+            let len = if let Some(size) =
+                s.wanted_length_field::<Options>(self.is_in_tlv_struct, &self.transformation_props)?
+            {
                 self.begin_length_delimited_section(size)?
             } else {
                 self.begin_known_length_delimited_section(s.max_size)?
@@ -918,7 +938,9 @@ where
             if !matches!(s.element_type, SomeIpType::Primitive(SomeIpPrimitive::U8)) {
                 panic!("Expeceted Primitive(u8) bu found {}", s.element_type)
             }
-            let len = if let Some(size) = s.wanted_length_field::<Options>(self.is_in_tlv_struct)? {
+            let len = if let Some(size) =
+                s.wanted_length_field::<Options>(self.is_in_tlv_struct, &self.transformation_props)?
+            {
                 self.begin_length_delimited_section(size)?
             } else {
                 self.begin_known_length_delimited_section(s.max_elements)?
@@ -955,7 +977,9 @@ where
             if !matches!(s.element_type, SomeIpType::Primitive(SomeIpPrimitive::U8)) {
                 panic!("Expeceted Primitive(u8) bu found {}", s.element_type)
             }
-            let len = if let Some(size) = s.wanted_length_field::<Options>(self.is_in_tlv_struct)? {
+            let len = if let Some(size) =
+                s.wanted_length_field::<Options>(self.is_in_tlv_struct, &self.transformation_props)?
+            {
                 self.begin_length_delimited_section(size)?
             } else {
                 self.begin_known_length_delimited_section(s.max_elements)?
@@ -1017,11 +1041,15 @@ where
 
     fn deserialize_seq<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         if let SomeIpType::Sequence(s) = self.next_type {
-            if let Some(size) = s.wanted_length_field::<Options>(self.is_in_tlv_struct)? {
+            if let Some(size) =
+                s.wanted_length_field::<Options>(self.is_in_tlv_struct, &self.transformation_props)?
+            {
                 self.begin_length_delimited_section(size)?;
             } else {
                 self.begin_known_length_delimited_section(
-                    s.max_elements * s.element_type.max_len::<Options>(false)?,
+                    s.max_elements
+                        * s.element_type
+                            .max_len::<Options>(false, &self.transformation_props)?,
                 )?;
             }
             let result = visitor.visit_seq(SomeIpSeqAccess::new(self, s))?;
@@ -1824,6 +1852,7 @@ fn test_struct() {
             uses_tlv_serialization: false,
             is_message_wrapper: false,
             length_field_size: None,
+            transformation_properties: None,
         });
     }
 
@@ -1875,6 +1904,7 @@ fn test_struct_beginning_length_field() {
             uses_tlv_serialization: false,
             is_message_wrapper: false,
             length_field_size: Some(LengthFieldSize::TwoBytes),
+            transformation_properties: None,
         });
     }
 
@@ -1927,6 +1957,7 @@ fn test_struct_tlv() {
             uses_tlv_serialization: true,
             is_message_wrapper: false,
             length_field_size: Some(LengthFieldSize::TwoBytes),
+            transformation_properties: None,
         });
     }
 
@@ -1980,6 +2011,7 @@ fn test_struct_tlv_message_wrapper() {
             uses_tlv_serialization: true,
             is_message_wrapper: true,
             length_field_size: Some(LengthFieldSize::TwoBytes),
+            transformation_properties: None,
         });
     }
 
@@ -2034,6 +2066,7 @@ fn test_struct_tlv_alternate_length_field_size() {
             uses_tlv_serialization: true,
             is_message_wrapper: false,
             length_field_size: Some(LengthFieldSize::TwoBytes),
+            transformation_properties: None,
         });
     }
 
@@ -2068,6 +2101,7 @@ fn test_optional() {
             uses_tlv_serialization: true,
             is_message_wrapper: false,
             length_field_size: Some(LengthFieldSize::OneByte),
+            transformation_properties: None,
         });
     }
 
@@ -2138,6 +2172,7 @@ fn test_reader() {
             uses_tlv_serialization: true,
             is_message_wrapper: false,
             length_field_size: Some(LengthFieldSize::TwoBytes),
+            transformation_properties: None,
         });
     }
 
@@ -2174,6 +2209,7 @@ fn test_unkown_ids() {
             uses_tlv_serialization: true,
             is_message_wrapper: false,
             length_field_size: Some(LengthFieldSize::OneByte),
+            transformation_properties: None,
         });
     }
 
@@ -2204,6 +2240,7 @@ fn test_struct_in_struct() {
             length_field_size: None,
             name: "Outer",
             uses_tlv_serialization: true,
+            transformation_properties: None,
             fields: &[SomeIpField {
                 id: Some(1),
                 name: "inner",
@@ -2212,6 +2249,7 @@ fn test_struct_in_struct() {
                     length_field_size: None,
                     name: "Inner",
                     uses_tlv_serialization: true,
+                    transformation_properties: None,
                     fields: &[SomeIpField {
                         id: Some(1),
                         name: "some_field",
@@ -2228,5 +2266,59 @@ fn test_struct_in_struct() {
     assert_eq!(
         expected,
         from_slice::<ExampleOptions, Outer>(&serialized).unwrap()
+    );
+}
+
+#[test]
+fn test_struct_with_props() {
+    #[derive(Debug, PartialEq, serde::Deserialize)]
+    struct TestStruct {
+        a: String,
+        b: Vec<u16>,
+    }
+
+    impl SomeIp for TestStruct {
+        const SOMEIP_TYPE: SomeIpType = SomeIpType::Struct(SomeIpStruct {
+            is_message_wrapper: false,
+            length_field_size: None,
+            name: "TestStruct",
+            uses_tlv_serialization: true,
+            transformation_properties: Some(SomeIpTransforationProperties {
+                size_of_array_length_field: Some(LengthFieldSize::OneByte),
+                size_of_string_length_field: Some(LengthFieldSize::TwoBytes),
+                size_of_struct_length_field: Some(LengthFieldSize::FourBytes),
+            }),
+            fields: &[
+                SomeIpField {
+                    id: Some(1),
+                    name: "a",
+                    field_type: &SomeIpType::String(SomeIpString {
+                        min_size: 0,
+                        max_size: 1337,
+                        length_field_size: None,
+                    }),
+                },
+                SomeIpField {
+                    id: Some(2),
+                    name: "b",
+                    field_type: &SomeIpType::Sequence(SomeIpSequence {
+                        element_type: &u16::SOMEIP_TYPE,
+                        min_elements: 0,
+                        max_elements: 42,
+                        length_field_size: None,
+                    }),
+                },
+            ],
+        });
+    }
+    let expected = TestStruct {
+        a: "".into(),
+        b: vec![42],
+    };
+
+    let serialized = vec![0, 0, 0, 9, 0x40, 1, 0, 0, 0x40, 2, 2, 0, 42];
+    assert_eq!(
+        expected,
+        from_slice::<ExampleOptions, TestStruct>(&serialized).unwrap()
     );
 }

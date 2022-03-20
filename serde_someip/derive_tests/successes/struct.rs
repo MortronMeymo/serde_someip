@@ -36,6 +36,12 @@ struct OptionTest {
     b: Option<f64>,
 }
 
+#[derive(SomeIp)]
+#[someip(strings_length_field_size = 2, structs_length_field_size = 1)]
+struct PropsTest {
+    a: i16,
+}
+
 fn main() {
     use serde_someip::length_fields::LengthFieldSize;
     use serde_someip::types::*;
@@ -46,6 +52,7 @@ fn main() {
             uses_tlv_serialization: false,
             is_message_wrapper: false,
             length_field_size: None,
+            transformation_properties: None,
             fields: &[
                 SomeIpField {
                     name: "a",
@@ -87,6 +94,7 @@ fn main() {
             uses_tlv_serialization: true,
             is_message_wrapper: false,
             length_field_size: None,
+            transformation_properties: None,
             fields: &[
                 SomeIpField {
                     name: "a",
@@ -128,6 +136,7 @@ fn main() {
             uses_tlv_serialization: false,
             is_message_wrapper: true,
             length_field_size: Some(LengthFieldSize::TwoBytes),
+            transformation_properties: None,
             fields: &[SomeIpField {
                 name: "foo",
                 id: None,
@@ -143,6 +152,7 @@ fn main() {
             uses_tlv_serialization: true,
             is_message_wrapper: false,
             length_field_size: None,
+            transformation_properties: None,
             fields: &[
                 SomeIpField {
                     name: "a",
@@ -157,5 +167,25 @@ fn main() {
             ],
         }),
         OptionTest::SOMEIP_TYPE
+    );
+
+    assert_eq!(
+        SomeIpType::Struct(SomeIpStruct {
+            name: "PropsTest",
+            uses_tlv_serialization: false,
+            is_message_wrapper: false,
+            length_field_size: None,
+            transformation_properties: Some(SomeIpTransforationProperties {
+                size_of_array_length_field: None,
+                size_of_struct_length_field: Some(LengthFieldSize::OneByte),
+                size_of_string_length_field: Some(LengthFieldSize::TwoBytes),
+            }),
+            fields: &[SomeIpField {
+                name: "a",
+                id: None,
+                field_type: &i16::SOMEIP_TYPE,
+            }]
+        }),
+        PropsTest::SOMEIP_TYPE
     );
 }

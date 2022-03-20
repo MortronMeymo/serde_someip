@@ -108,12 +108,6 @@ pub trait SomeIpOptions {
     /// The default length field size to use if the type does not define one.
     const DEFAULT_LENGTH_FIELD_SIZE: Option<LengthFieldSize> = Some(LengthFieldSize::FourBytes);
 
-    /// The length field size whith which to overwrite all length field sizes.
-    ///
-    /// This is very commonly used if TLV structs are being used.
-    /// You can use [create_length_field_overwrites] to quickly create all possible versions of your options regarding this field.
-    const OVERWRITE_LENGTH_FIELD_SIZE: Option<LengthFieldSize> = None;
-
     /// Should the serializer output the legacy wire type for length delimited fields?
     ///
     /// By default wiretypes 5(length delimited one byte), 6(length delimited two bytes) or
@@ -221,16 +215,10 @@ pub trait SomeIpOptions {
 }
 
 #[inline]
-pub(crate) fn overwrite_length_field_size<T: SomeIpOptions + ?Sized>(
+pub(crate) fn apply_defaults<T: SomeIpOptions + ?Sized>(
     from_type: Option<LengthFieldSize>,
 ) -> Option<LengthFieldSize> {
-    if T::OVERWRITE_LENGTH_FIELD_SIZE.is_some() {
-        T::OVERWRITE_LENGTH_FIELD_SIZE
-    } else if from_type.is_some() {
-        from_type
-    } else {
-        T::DEFAULT_LENGTH_FIELD_SIZE
-    }
+    from_type.or(T::DEFAULT_LENGTH_FIELD_SIZE)
 }
 
 #[inline]
@@ -260,67 +248,10 @@ pub(crate) fn select_length_field_size<T: SomeIpOptions + ?Sized>(
         Ok(configured)
     }
 }
-/// This macro can be used to quickly provide the different options possible for [OVERWRITE_LENGTH_FIELD_SIZE](SomeIpOptions::OVERWRITE_LENGTH_FIELD_SIZE).
-///
-/// ```
-/// # use serde_someip::length_fields::LengthFieldSize;
-/// use serde_someip::options::*;
-/// use serde_someip::create_length_field_overwrites;
-///
-/// struct MyOptions;
-/// impl SomeIpOptions for MyOptions {
-///     //must be None for the macro to work correctly
-///     const OVERWRITE_LENGTH_FIELD_SIZE: Option<LengthFieldSize> = None;
-///     // overwrite other constants as needed
-/// }
-///
-/// create_length_field_overwrites!(
-///     MyOptions;
-///     struct MyOptionsOverwriteOne;
-///     struct MyOptionsOverwriteTwo;
-///     struct MyOptionsOverwriteFour;
-/// );
-///
-/// assert_eq!(MyOptionsOverwriteTwo::OVERWRITE_LENGTH_FIELD_SIZE, Some(LengthFieldSize::TwoBytes));
-/// ```
-#[macro_export]
-macro_rules! create_length_field_overwrites {
-    (@create_one $orig:ident,  $(#[$outer:meta])* $vis:vis $newType:ident $newName:ident, $lengthFieldSize:expr) => {
-        $(#[$outer])*
-        $vis $newType $newName;
-        impl SomeIpOptions for $newName {
-            const BYTE_ORDER: ByteOrder = $orig::BYTE_ORDER;
-            const STRING_WITH_BOM: bool = $orig::STRING_WITH_BOM;
-            const STRING_ENCODING: StringEncoding = $orig::STRING_ENCODING;
-            const STRING_WITH_TERMINATOR: bool = $orig::STRING_WITH_TERMINATOR;
-            const DEFAULT_LENGTH_FIELD_SIZE: Option<LengthFieldSize> = $orig::DEFAULT_LENGTH_FIELD_SIZE;
-            const OVERWRITE_LENGTH_FIELD_SIZE: Option<LengthFieldSize> = $lengthFieldSize;
-            const SERIALIZER_USE_LEGACY_WIRE_TYPE: bool = $orig::SERIALIZER_USE_LEGACY_WIRE_TYPE;
-            const SERIALIZER_LENGTH_FIELD_SIZE_SELECTION: LengthFieldSizeSelection = $orig::SERIALIZER_LENGTH_FIELD_SIZE_SELECTION;
-            const DESERIALIZER_STRICT_BOOL: bool = $orig::DESERIALIZER_STRICT_BOOL;
-            const DESERIALIZER_ACTION_ON_TOO_MUCH_DATA: ActionOnTooMuchData = $orig::DESERIALIZER_ACTION_ON_TOO_MUCH_DATA;
-        }
-    };
-
-    ($orig:ident;  $(#[$outer1:meta])* $vis1:vis $type1:ident $name1:ident;  $(#[$outer2:meta])* $vis2:vis $type2:ident $name2:ident;  $(#[$outer3:meta])* $vis3:vis $type3:ident $name3:ident;) => {
-        create_length_field_overwrites!(@create_one $orig, $(#[$outer1])* $vis1 $type1 $name1, Some(LengthFieldSize::OneByte));
-        create_length_field_overwrites!(@create_one $orig, $(#[$outer2])* $vis2 $type2 $name2, Some(LengthFieldSize::TwoBytes));
-        create_length_field_overwrites!(@create_one $orig, $(#[$outer3])* $vis3 $type3 $name3, Some(LengthFieldSize::FourBytes));
-    };
-}
 
 /// A struct that implements [SomeIpOptions] without overwriting any defaults to quickly get started.
 pub struct ExampleOptions;
 impl SomeIpOptions for ExampleOptions {}
-create_length_field_overwrites!(
-    ExampleOptions;
-    /// A struct that implements [SomeIpOptions] without overwriting any defaults exepct for [OVERWRITE_LENGTH_FIELD_SIZE](SomeIpOptions::OVERWRITE_LENGTH_FIELD_SIZE) to [OneByte](super::length_fields::LengthFieldSize::OneByte).
-    pub struct ExampleOptionsOverwriteOne;
-    /// A struct that implements [SomeIpOptions] without overwriting any defaults exepct for [OVERWRITE_LENGTH_FIELD_SIZE](SomeIpOptions::OVERWRITE_LENGTH_FIELD_SIZE) to [TwoBytes](super::length_fields::LengthFieldSize::TwoBytes).
-    pub struct ExampleOptionsOverwriteTwo;
-    /// A struct that implements [SomeIpOptions] without overwriting any defaults exepct for [OVERWRITE_LENGTH_FIELD_SIZE](SomeIpOptions::OVERWRITE_LENGTH_FIELD_SIZE) to [FourBytes](super::length_fields::LengthFieldSize::FourBytes).
-    pub struct ExampleOptionsOverwriteFour;
-);
 
 #[cfg(test)]
 pub(crate) mod test {

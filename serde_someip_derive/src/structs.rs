@@ -35,25 +35,30 @@ fn derive_normal_struct(
     fields: FieldsNamed,
     ident: &Ident,
 ) -> Result<TokenStream> {
-    let (lfsize, is_message_wrapper) = if let Some(attr) = get_optional_someip_attr(attrs)? {
-        attr.check(
-            &[],
-            &[
-                ("message_wrapper", AttributeValueType::Bool),
-                ("length_field_size", AttributeValueType::Int),
-            ],
-            &[],
-        )?;
-        let lfsize = derive_length_field_size(&attr)?;
-        let is_message_wrapper = if let Some(v) = attr.get_optional("message_wrapper") {
-            v.as_ref().unwrap_bool().value
+    let (lfsize, is_message_wrapper, transformation_props) =
+        if let Some(attr) = get_optional_someip_attr(attrs)? {
+            attr.check(
+                &[],
+                &[
+                    ("message_wrapper", AttributeValueType::Bool),
+                    ("length_field_size", AttributeValueType::Int),
+                    ("arrays_length_field_size", AttributeValueType::Int),
+                    ("structs_length_field_size", AttributeValueType::Int),
+                    ("strings_length_field_size", AttributeValueType::Int),
+                ],
+                &[],
+            )?;
+            let lfsize = derive_length_field_size(&attr)?;
+            let is_message_wrapper = if let Some(v) = attr.get_optional("message_wrapper") {
+                v.as_ref().unwrap_bool().value
+            } else {
+                false
+            };
+            let transformation_props = get_transformation_props(&attr)?;
+            (lfsize, is_message_wrapper, transformation_props)
         } else {
-            false
+            (quote! {None}, false, quote! {None})
         };
-        (lfsize, is_message_wrapper)
-    } else {
-        (quote! {None}, false)
-    };
 
     let mut encountered_ids = 0;
     let mut seen_ids: HashSet<u16> = HashSet::default();
@@ -122,6 +127,7 @@ fn derive_normal_struct(
             uses_tlv_serialization: #is_tlv,
             is_message_wrapper: #is_message_wrapper,
             length_field_size: #lfsize,
+            transformation_properties: #transformation_props,
         })
     })
 }
@@ -290,6 +296,38 @@ fn derive_array_type(
             length_field_size: #lfsize,
         })},
     )
+}
+
+fn get_transformation_props(attr: &SomeIpAttribute) -> Result<TokenStream> {
+    let mut at_least_one = false;
+    let arrays = if let Some(attr) = attr.get_optional("arrays_length_field_size") {
+        at_least_one = true;
+        attr.to_length_field_size()?
+    } else {
+        quote! {None}
+    };
+    let structs = if let Some(attr) = attr.get_optional("structs_length_field_size") {
+        at_least_one = true;
+        attr.to_length_field_size()?
+    } else {
+        quote! {None}
+    };
+    let strings = if let Some(attr) = attr.get_optional("strings_length_field_size") {
+        at_least_one = true;
+        attr.to_length_field_size()?
+    } else {
+        quote! {None}
+    };
+
+    Ok(if at_least_one {
+        quote! {Some(serde_someip::types::SomeIpTransforationProperties {
+            size_of_array_length_field: #arrays,
+            size_of_struct_length_field: #structs,
+            size_of_string_length_field: #strings,
+        })}
+    } else {
+        quote! {None}
+    })
 }
 
 #[inline]
