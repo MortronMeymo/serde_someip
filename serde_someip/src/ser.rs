@@ -526,10 +526,17 @@ impl<Options: SomeIpOptions + ?Sized, Writer: SomeIpWriter> SomeIpSerializer<Opt
     }
 
     fn internal_write_str(&mut self, v: &str) -> Result<()> {
-        if Options::STRING_ENCODING != StringEncoding::Utf16 {
+        if !Options::STRING_ENCODING.is_utf16_variant() {
             self.writer.write(v.as_bytes())
         } else {
-            v.encode_utf16().try_for_each(|c| c.serialize(&mut *self))
+            let byte_order = match Options::STRING_ENCODING {
+                StringEncoding::Utf16 => Options::BYTE_ORDER,
+                StringEncoding::Utf16Le => ByteOrder::LittleEndian,
+                StringEncoding::Utf16Be => ByteOrder::BigEndian,
+                _ => unreachable!(),
+            };
+            v.encode_utf16()
+                .try_for_each(|c| self.writer.write_ux(c, byte_order))
         }
     }
 }
@@ -1700,4 +1707,40 @@ fn test_struct_with_props() {
     let mut result = Vec::default();
     append_to_vec::<Options, _>(&teste, &mut result).unwrap();
     assert_eq!(vec![0, 0, 0, 9, 0x60, 1, 0, 0, 0x50, 2, 2, 0, 42], result);
+}
+
+#[test]
+fn test_string_utf16le_ints_be() {
+    const SOMEIP_TYPE: SomeIpType = SomeIpType::String(SomeIpString {
+        max_size: 4,
+        min_size: 0,
+        length_field_size: Some(LengthFieldSize::OneByte),
+    });
+
+    struct Options;
+    impl SomeIpOptions for Options {
+        const BYTE_ORDER: ByteOrder = ByteOrder::BigEndian;
+        const STRING_ENCODING: StringEncoding = StringEncoding::Utf16Le;
+    }
+
+    let result = to_x_manuel::<Options, _, _>(&"hi", &SOMEIP_TYPE, Vec::default()).unwrap();
+    assert_eq!(vec![4, 0x68, 0, 0x69, 0], result);
+}
+
+#[test]
+fn test_string_utf16be_ints_le() {
+    const SOMEIP_TYPE: SomeIpType = SomeIpType::String(SomeIpString {
+        max_size: 4,
+        min_size: 0,
+        length_field_size: Some(LengthFieldSize::OneByte),
+    });
+
+    struct Options;
+    impl SomeIpOptions for Options {
+        const BYTE_ORDER: ByteOrder = ByteOrder::LittleEndian;
+        const STRING_ENCODING: StringEncoding = StringEncoding::Utf16Be;
+    }
+
+    let result = to_x_manuel::<Options, _, _>(&"hi", &SOMEIP_TYPE, Vec::default()).unwrap();
+    assert_eq!(vec![4, 0, 0x68, 0, 0x69], result);
 }

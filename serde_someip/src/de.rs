@@ -364,7 +364,12 @@ where
                 }
             })?
         } else {
-            Options::BYTE_ORDER
+            match Options::STRING_ENCODING {
+                StringEncoding::Utf16 => Options::BYTE_ORDER,
+                StringEncoding::Utf16Le => ByteOrder::LittleEndian,
+                StringEncoding::Utf16Be => ByteOrder::BigEndian,
+                _ => unreachable!(),
+            }
         };
         let u16_parser = || self.read_ux::<u16>(byte_order);
 
@@ -899,7 +904,7 @@ where
                         });
                     }
                     ActionOnTooMuchData::Discard => {
-                        let val = if Options::STRING_ENCODING == StringEncoding::Utf16 {
+                        let val = if Options::STRING_ENCODING.is_utf16_variant() {
                             self.read_utf16_string(s.max_size)?
                         } else {
                             self.read_utf8_string(s.max_size)?
@@ -908,14 +913,14 @@ where
                         val
                     }
                     ActionOnTooMuchData::Keep => {
-                        if Options::STRING_ENCODING == StringEncoding::Utf16 {
+                        if Options::STRING_ENCODING.is_utf16_variant() {
                             self.read_utf16_string(len)?
                         } else {
                             self.read_utf8_string(len)?
                         }
                     }
                 }
-            } else if Options::STRING_ENCODING == StringEncoding::Utf16 {
+            } else if Options::STRING_ENCODING.is_utf16_variant() {
                 self.read_utf16_string(len)?
             } else {
                 self.read_utf8_string(len)?
@@ -2320,5 +2325,95 @@ fn test_struct_with_props() {
     assert_eq!(
         expected,
         from_slice::<ExampleOptions, TestStruct>(&serialized).unwrap()
+    );
+}
+
+#[test]
+fn test_string_utf16le_ints_be() {
+    const SOMEIP_TYPE: SomeIpType = SomeIpType::String(SomeIpString {
+        max_size: 4,
+        min_size: 0,
+        length_field_size: Some(LengthFieldSize::OneByte),
+    });
+
+    struct Options;
+    impl SomeIpOptions for Options {
+        const BYTE_ORDER: ByteOrder = ByteOrder::BigEndian;
+        const STRING_ENCODING: StringEncoding = StringEncoding::Utf16Le;
+    }
+
+    assert_eq!(
+        "hi",
+        from_internal::<Options, String, _>(vec![4, 0x68, 0, 0x69, 0].as_slice(), &SOMEIP_TYPE)
+            .unwrap()
+    );
+}
+
+#[test]
+fn test_string_utf16le_ints_be_detect_swapped_byte_order() {
+    const SOMEIP_TYPE: SomeIpType = SomeIpType::String(SomeIpString {
+        max_size: 6,
+        min_size: 0,
+        length_field_size: Some(LengthFieldSize::OneByte),
+    });
+    struct Options;
+    impl SomeIpOptions for Options {
+        const BYTE_ORDER: ByteOrder = ByteOrder::BigEndian;
+        const STRING_ENCODING: StringEncoding = StringEncoding::Utf16Le;
+        const STRING_WITH_BOM: bool = true;
+    }
+
+    assert_eq!(
+        "hi",
+        from_internal::<Options, String, _>(
+            vec![6, 0xFE, 0xFF, 0, 0x68, 0, 0x69].as_slice(),
+            &SOMEIP_TYPE
+        )
+        .unwrap()
+    );
+}
+
+#[test]
+fn test_string_utf16be_ints_le() {
+    const SOMEIP_TYPE: SomeIpType = SomeIpType::String(SomeIpString {
+        max_size: 4,
+        min_size: 0,
+        length_field_size: Some(LengthFieldSize::OneByte),
+    });
+
+    struct Options;
+    impl SomeIpOptions for Options {
+        const BYTE_ORDER: ByteOrder = ByteOrder::LittleEndian;
+        const STRING_ENCODING: StringEncoding = StringEncoding::Utf16Be;
+    }
+
+    assert_eq!(
+        "hi",
+        from_internal::<Options, String, _>(vec![4, 0, 0x68, 0, 0x69].as_slice(), &SOMEIP_TYPE)
+            .unwrap()
+    );
+}
+
+#[test]
+fn test_string_utf16be_ints_le_detect_swapped_byte_order() {
+    const SOMEIP_TYPE: SomeIpType = SomeIpType::String(SomeIpString {
+        max_size: 6,
+        min_size: 0,
+        length_field_size: Some(LengthFieldSize::OneByte),
+    });
+    struct Options;
+    impl SomeIpOptions for Options {
+        const BYTE_ORDER: ByteOrder = ByteOrder::LittleEndian;
+        const STRING_ENCODING: StringEncoding = StringEncoding::Utf16Be;
+        const STRING_WITH_BOM: bool = true;
+    }
+
+    assert_eq!(
+        "hi",
+        from_internal::<Options, String, _>(
+            vec![6, 0xFF, 0xFE, 0x68, 0, 0x69, 0].as_slice(),
+            &SOMEIP_TYPE
+        )
+        .unwrap()
     );
 }

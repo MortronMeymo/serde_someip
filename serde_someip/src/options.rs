@@ -32,12 +32,26 @@ pub enum StringEncoding {
     ///
     /// This matches the internal string encoding of rust.
     Utf8,
-    /// Strings are UTF-16 encoded.
+    /// Strings are UTF-16 encoded and use the same byte order as primitve types.
     Utf16,
+    /// Strings are UTF-16 encoded and are always encoded in little endian byte order.
+    Utf16Le,
+    /// Strings are UTF-16 encoded and are always encoded in big endian byte order.
+    Utf16Be,
     /// Strings are ASCII encoded.
     ///
     /// Note that ASCII is a subset of UTF-8 so any ASCII string is also a valid UTF-8 string.
     Ascii,
+}
+
+impl StringEncoding {
+    #[inline]
+    pub(crate) fn is_utf16_variant(&self) -> bool {
+        matches!(
+            self,
+            StringEncoding::Utf16 | StringEncoding::Utf16Le | StringEncoding::Utf16Be
+        )
+    }
 }
 
 /// How the serializer should pick LengthFieldSizes in TLV encoded structs.
@@ -98,7 +112,7 @@ pub trait SomeIpOptions {
     ///
     /// Setting this to `true` while using [Ascii](StringEncoding::Ascii) is an error, since the BOM char is not part of the ASCII char set.
     ///
-    /// If true and the encoding is [Utf16](StringEncoding::Utf16) the deserializer will dynamically determine the byte order of strings.
+    /// If true and the encoding is any utf-16 encoding the deserializer will dynamically determine the byte order of strings based on the BOM.
     const STRING_WITH_BOM: bool = false;
     /// The encoding used by strings
     const STRING_ENCODING: StringEncoding = StringEncoding::Utf8;

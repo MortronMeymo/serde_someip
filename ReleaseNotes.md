@@ -1,5 +1,9 @@
 # Releases of `serde_someip`
 
+## 0.2.1
+
+- Add string encodings `Utf16Le` and `Utf16Be` which can be used if the utf-16 strings use a different endianess than the primitive types.
+
 ## 0.2.0
 
 - Breaking change: Remove `OVERWRITE_LENGTH_FIELD_SIZE` from `SomeIpOptions`. Since this is not really a global option this functionality was moved to the `SomeIp` trait on the de/serialized type.
